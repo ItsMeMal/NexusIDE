@@ -1,9 +1,36 @@
 import 'dart:io';
 import 'dart:math' as math;
 
+import 'package:code_text_field/code_text_field.dart';
 import 'package:file_selector/file_selector.dart' as fs;
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:flutter_highlight/themes/vs2015.dart';
+import 'package:highlight/highlight.dart' show Mode;
+import 'package:highlight/languages/bash.dart' as lang_bash;
+import 'package:highlight/languages/cpp.dart' as lang_cpp;
+import 'package:highlight/languages/cs.dart' as lang_cs;
+import 'package:highlight/languages/css.dart' as lang_css;
+import 'package:highlight/languages/dart.dart' as lang_dart;
+import 'package:highlight/languages/dockerfile.dart' as lang_dockerfile;
+import 'package:highlight/languages/go.dart' as lang_go;
+import 'package:highlight/languages/ini.dart' as lang_ini;
+import 'package:highlight/languages/java.dart' as lang_java;
+import 'package:highlight/languages/javascript.dart' as lang_javascript;
+import 'package:highlight/languages/json.dart' as lang_json;
+import 'package:highlight/languages/kotlin.dart' as lang_kotlin;
+import 'package:highlight/languages/lua.dart' as lang_lua;
+import 'package:highlight/languages/markdown.dart' as lang_markdown;
+import 'package:highlight/languages/php.dart' as lang_php;
+import 'package:highlight/languages/powershell.dart' as lang_powershell;
+import 'package:highlight/languages/python.dart' as lang_python;
+import 'package:highlight/languages/ruby.dart' as lang_ruby;
+import 'package:highlight/languages/rust.dart' as lang_rust;
+import 'package:highlight/languages/sql.dart' as lang_sql;
+import 'package:highlight/languages/swift.dart' as lang_swift;
+import 'package:highlight/languages/typescript.dart' as lang_typescript;
+import 'package:highlight/languages/xml.dart' as lang_xml;
+import 'package:highlight/languages/yaml.dart' as lang_yaml;
 import 'package:path/path.dart' as p;
 
 const bg = Color(0xFF0D1117);
@@ -56,14 +83,98 @@ class SaveFileIntent extends Intent {
 class OpenDocument {
   OpenDocument(this.path, String content)
       : name = p.basename(path),
-        controller = TextEditingController(text: content);
+        controller = CodeController(
+          text: content,
+          language: editorLanguageForPath(path),
+        );
 
   final String path;
   final String name;
-  final TextEditingController controller;
+  final CodeController controller;
   bool dirty = false;
 
   void dispose() => controller.dispose();
+}
+
+Mode? editorLanguageForPath(String filePath) {
+  final fileName = p.basename(filePath).toLowerCase();
+  if (fileName == 'dockerfile' || fileName.startsWith('dockerfile.')) {
+    return lang_dockerfile.dockerfile;
+  }
+
+  switch (p.extension(fileName)) {
+    case '.dart':
+      return lang_dart.dart;
+    case '.js':
+    case '.jsx':
+    case '.mjs':
+    case '.cjs':
+      return lang_javascript.javascript;
+    case '.ts':
+    case '.tsx':
+      return lang_typescript.typescript;
+    case '.py':
+      return lang_python.python;
+    case '.json':
+    case '.jsonc':
+      return lang_json.json;
+    case '.yaml':
+    case '.yml':
+      return lang_yaml.yaml;
+    case '.html':
+    case '.htm':
+    case '.xml':
+    case '.svg':
+      return lang_xml.xml;
+    case '.css':
+    case '.scss':
+    case '.less':
+      return lang_css.css;
+    case '.java':
+      return lang_java.java;
+    case '.kt':
+    case '.kts':
+      return lang_kotlin.kotlin;
+    case '.c':
+    case '.h':
+    case '.cpp':
+    case '.cc':
+    case '.cxx':
+    case '.hpp':
+      return lang_cpp.cpp;
+    case '.cs':
+      return lang_cs.cs;
+    case '.go':
+      return lang_go.go;
+    case '.rs':
+      return lang_rust.rust;
+    case '.php':
+      return lang_php.php;
+    case '.rb':
+      return lang_ruby.ruby;
+    case '.lua':
+      return lang_lua.lua;
+    case '.swift':
+      return lang_swift.swift;
+    case '.sql':
+      return lang_sql.sql;
+    case '.sh':
+    case '.bash':
+      return lang_bash.bash;
+    case '.ps1':
+    case '.psm1':
+      return lang_powershell.powershell;
+    case '.md':
+    case '.markdown':
+      return lang_markdown.markdown;
+    case '.ini':
+    case '.cfg':
+    case '.properties':
+    case '.toml':
+      return lang_ini.ini;
+    default:
+      return null;
+  }
 }
 
 class IdeHome extends StatefulWidget {
@@ -1144,25 +1255,41 @@ class CodeEditor extends StatelessWidget {
           ),
         ),
         Expanded(
-          child: Container(
-            color: bg,
-            padding: const EdgeInsets.fromLTRB(17, 12, 14, 8),
-            child: TextField(
+          child: CodeTheme(
+            data: const CodeThemeData(styles: vs2015Theme),
+            child: CodeField(
               controller: document.controller,
               expands: true,
-              maxLines: null,
               minLines: null,
-              keyboardType: TextInputType.multiline,
-              textAlignVertical: TextAlignVertical.top,
+              maxLines: null,
+              wrap: false,
+              horizontalScroll: true,
+              lineNumbers: true,
+              background: bg,
               cursorColor: accent,
-              style: const TextStyle(
-                color: Color(0xFFD6E0EB),
+              padding: const EdgeInsets.fromLTRB(14, 12, 16, 8),
+              lineNumberStyle: const LineNumberStyle(
+                width: 42,
+                textAlign: TextAlign.right,
+                margin: 10,
+                background: bg,
+                textStyle: TextStyle(
+                  color: Color(0xFF6E7681),
+                  fontFamily: 'Consolas',
+                  fontSize: 13.5,
+                  height: 1.65,
+                ),
+              ),
+              textStyle: const TextStyle(
+                color: Color(0xFFD4D4D4),
                 fontFamily: 'Consolas',
                 fontSize: 13.5,
                 height: 1.65,
               ),
               decoration: const InputDecoration(
                 isCollapsed: true,
+                border: InputBorder.none,
+                contentPadding: EdgeInsets.zero,
                 hintText: 'Start writing...',
                 hintStyle: TextStyle(color: muted),
               ),

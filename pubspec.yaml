@@ -10,6 +10,9 @@ dependencies:
   flutter:
     sdk: flutter
   file_selector: ^1.1.0
+  code_text_field: ^1.1.0
+  flutter_highlight: ^0.7.0
+  highlight: ^0.7.0
   path: ^1.9.1
 
 dev_dependencies:

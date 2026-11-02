@@ -87,11 +87,31 @@ class _AiAgentPanelState extends State<AiAgentPanel> {
     super.dispose();
   }
 
+  Future<void> _clearLegacyGatewaySession() async {
+    final cookie = await _secureStorage.read(key: _legacySessionName);
+    final keyId = await _secureStorage.read(key: _legacyApiKeyIdName);
+    if (cookie != null && cookie.isNotEmpty && keyId != null && keyId.isNotEmpty) {
+      try {
+        await http.delete(
+          Uri.parse(_gatewayOrigin + '/account/api-keys/' + keyId),
+          headers: {'Cookie': cookie, 'Accept': 'application/json'},
+        ).timeout(const Duration(seconds: 8));
+      } catch (_) {}
+      try {
+        await http.post(
+          Uri.parse(_gatewayOrigin + '/auth/logout'),
+          headers: {'Cookie': cookie},
+        ).timeout(const Duration(seconds: 8));
+      } catch (_) {}
+    }
+    for (final legacy in <String>[_legacyKeyName, _legacySessionName, _legacyApiKeyIdName]) {
+      try { await _secureStorage.delete(key: legacy); } catch (_) {}
+    }
+  }
+
   Future<void> _loadSettings() async {
     try {
-      for (final legacy in <String>[_legacyKeyName, _legacySessionName, _legacyApiKeyIdName]) {
-        await _secureStorage.delete(key: legacy);
-      }
+      await _clearLegacyGatewaySession();
       var accessToken = await _secureStorage.read(key: _accessTokenName);
       var refreshToken = await _secureStorage.read(key: _refreshTokenName);
       final expiresAt = int.tryParse(await _secureStorage.read(key: _expiresAtName) ?? '');

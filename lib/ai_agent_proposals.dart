@@ -56,7 +56,20 @@ class AiAgentProposalParser {
           parts.contains('.git') || parts.contains('node_modules') || item['content']!.length > 500000) continue;
       final absolute = p.normalize(p.join(root, parts.join(p.separator)));
       if (!p.isWithin(root, absolute) || p.equals(root, absolute) || !seen.add(absolute.toLowerCase())) continue;
-      if (await Directory(absolute).exists()) continue;
+
+      // Do not read or propose writes through symbolic links.
+      var linkedParent = false;
+      var parent = root;
+      for (final segment in parts.take(parts.length - 1)) {
+        parent = p.join(parent, segment);
+        if (await FileSystemEntity.type(parent, followLinks: false) == FileSystemEntityType.link) {
+          linkedParent = true;
+          break;
+        }
+      }
+      if (linkedParent) continue;
+      final targetType = await FileSystemEntity.type(absolute, followLinks: false);
+      if (targetType == FileSystemEntityType.link || targetType == FileSystemEntityType.directory) continue;
       String? oldContent;
       try {
         final file = File(absolute);

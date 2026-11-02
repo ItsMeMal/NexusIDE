@@ -14,16 +14,16 @@ NexusIDE is a cross-platform Flutter coding workspace. The Windows layout follow
 
 ## Stage 2 — AI Agent basics
 
-- Connect to Mallss Nexus Route using its OpenAI-compatible Chat Completions API.
-- Default API base URL: https://ai-router.mallss-nexus.sbs/v1
-- Default model ID: Nexus-Free.
-- Test the API key and endpoint from AI Agent settings.
-- Include a limited workspace tree and the contents of up to eight open files as project context.
+- Sign in or create an account using the same email and password as Mallss Nexus Route.
+- Gateway URL and model selection are fixed internally: https://ai-router.mallss-nexus.sbs/v1 and Nexus-Free.
+- NexusIDE creates an account-owned API key automatically after login and stores it with secure device storage.
+- The Agent sends a limited workspace tree and up to eight open files as context when you submit a prompt.
 - Ask questions about code or request file changes.
-- Review each proposed file side by side with the current contents before applying it. The agent never writes its proposal automatically.
-- API keys are stored with secure device storage. Common secret files such as .env, private keys, and service-account credentials are excluded from file-content context.
+- Review proposed file changes before applying them; the Agent never writes a proposal automatically.
+- Sign out attempts to revoke the NexusIDE-generated API key and ends the gateway account session.
+- Common secret files such as .env, private keys, and service-account credentials are excluded from project file-content context.
 
-To connect the agent, create an API key in the Mallss Nexus Route dashboard at https://ai-router.mallss-nexus.sbs/dashboard, open AI Agent in NexusIDE, enter the key, and save settings. Your prompts and the included workspace context are sent to the configured model when you submit a request. Avoid opening sensitive files that are not safe to share with the model.
+Your prompts and included workspace context are sent to the configured model when you submit a request. Avoid opening sensitive files that are not safe to share with the model.
 
 The AI Agent currently supports proposed file creation and updates, not file deletion. Review the changes before applying them.
 
@@ -42,7 +42,6 @@ The AI Agent currently supports proposed file creation and updates, not file del
 - file_selector for native file and directory pickers
 - http for gateway requests
 - flutter_secure_storage for the API key
-- shared_preferences for non-secret settings
 - path for cross-platform path handling
 
 ## Requirements

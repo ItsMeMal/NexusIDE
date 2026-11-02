@@ -14,9 +14,7 @@ NexusIDE is a cross-platform Flutter coding workspace. The Windows layout follow
 
 ## Stage 2 — AI Agent basics
 
-- Google OAuth uses a server-side web client. The client secret stays in the gateway environment; NexusIDE uses a one-time code + PKCE handoff.
-
-- Sign in with Google through the system browser using the Mallss Nexus Route OAuth connector; no email/password form is shown in NexusIDE.
+- Sign in or create an account using the same email and password as Mallss Nexus Route.
 - Gateway URL and model selection are fixed internally: https://ai-router.mallss-nexus.sbs/v1 and Nexus-Free.
 - NexusIDE creates an account-owned API key automatically after login and stores it with secure device storage.
 - The Agent sends a limited workspace tree and up to eight open files as context when you submit a prompt.
@@ -44,20 +42,7 @@ The AI Agent currently supports proposed file creation and updates, not file del
 - file_selector for native file and directory pickers
 - http for gateway requests
 - flutter_secure_storage for the API key
-- flutter_web_auth_2 for browser-based OAuth on desktop and mobile
-- crypto for the PKCE code challenge
 - path for cross-platform path handling
-
-## Google sign-in setup
-
-Configure these environment variables on the Mallss Nexus Route gateway and redeploy it:
-
-- `GOOGLE_OAUTH_CLIENT_ID`
-- `GOOGLE_OAUTH_CLIENT_SECRET`
-- `GOOGLE_OAUTH_REDIRECT_URI=https://ai-router.mallss-nexus.sbs/auth/google/callback`
-- Optional: `NEXUSIDE_OAUTH_REDIRECT_URI=nexuside://oauth/callback`
-
-Create a **Web application** OAuth client in Google Cloud Console and register the exact callback URL as an authorized redirect URI. The Google client secret must never be added to this Flutter repository. The gateway README has the same deployment notes.
 
 ## Requirements
 
@@ -91,10 +76,4 @@ This repository starts with Dart source. Generate the native Windows and Android
 
 The bootstrap script refuses to overwrite existing Windows or Android folders. Do not run it again after the native runners have been generated.
 
-For Android, configure the OAuth callback in the generated native runner once:
-
-   ~~~powershell
-   powershell -ExecutionPolicy Bypass -File .\tool\configure_google_oauth.ps1
-   ~~~
-
-   Then connect an emulator or device, use `flutter devices`, and run `flutter run -d DEVICE_ID`. The bootstrap script applies this callback configuration automatically when it creates the Android runner. The full Acode-inspired mobile workflow is planned for a later stage.
+For Android, connect an emulator or device, then use flutter devices and flutter run -d DEVICE_ID. The full Acode-inspired mobile workflow is planned for a later stage.

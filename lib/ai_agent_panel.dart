@@ -427,7 +427,11 @@ class _AiAgentPanelState extends State<AiAgentPanel> {
       _status = 'Model changed to ' + model + '.';
       _statusError = false;
     });
-    await _secureStorage.write(key: _selectedModelName, value: model);
+    try {
+      await _secureStorage.write(key: _selectedModelName, value: model);
+    } catch (error) {
+      if (mounted) _setStatus('Model is active, but its preference could not be saved: ' + _client.friendlyError(error), true);
+    }
   }
 
   Future<void> _loadAvailableModels({bool announce = false, bool checkButton = false}) async {

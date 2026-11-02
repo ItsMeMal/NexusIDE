@@ -282,6 +282,14 @@ class _AiAgentPanelState extends State<AiAgentPanel> {
           return;
         }
         final callback = request.uri;
+        if (callback.queryParameters['state'] != state ||
+            (callback.queryParameters['code'] == null && callback.queryParameters['error'] == null)) {
+          request.response.statusCode = HttpStatus.badRequest;
+          request.response.headers.contentType = ContentType.text;
+          request.response.write('Invalid authorization callback. Return to NexusIDE and try again.');
+          await request.response.close();
+          return;
+        }
         request.response.statusCode = HttpStatus.ok;
         request.response.headers.contentType = ContentType.html;
         request.response.headers.set('Cache-Control', 'no-store');
@@ -324,7 +332,18 @@ class _AiAgentPanelState extends State<AiAgentPanel> {
       if (tokenResponse.statusCode < 200 || tokenResponse.statusCode >= 300) throw Exception(_responseError(tokenResponse));
       final tokenData = _decodeResponse(tokenResponse.body);
       if (tokenData == null) throw Exception('Gateway returned invalid OAuth token data.');
+      final previousRefreshToken = await _secureStorage.read(key: _refreshTokenName);
       final accessToken = await _saveOAuthTokens(tokenData);
+      final newRefreshToken = tokenData['refresh_token'];
+      if (previousRefreshToken != null && previousRefreshToken.isNotEmpty &&
+          newRefreshToken is String && previousRefreshToken != newRefreshToken) {
+        try {
+          await _oauthFormPost({
+            'token': previousRefreshToken,
+            'token_type_hint': 'refresh_token',
+          }, endpoint: '/auth/oauth/revoke');
+        } catch (_) {}
+      }
       final user = tokenData['user'];
       final email = user is Map && user['email'] is String ? user['email'] as String : '';
       final displayName = user is Map && user['display_name'] is String ? user['display_name'] as String : email;

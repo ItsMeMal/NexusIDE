@@ -1,23 +1,48 @@
 # NexusIDE
 
-NexusIDE is a cross-platform coding workspace built with Flutter. This first milestone focuses on a reliable editor foundation for Windows, with a responsive layout that can later be refined for Android.
+NexusIDE is a cross-platform Flutter coding workspace. The Windows layout follows familiar desktop IDE patterns; Android refinement is planned for a later stage.
 
 ## Stage 1 — IDE foundation
 
-Included in this increment:
 - Open a workspace folder or one or more files.
-- Browse folders in the Explorer panel.
-- Open multiple files in tabs and switch between them.
-- Edit text files and save with the toolbar or Ctrl+S / Cmd+S.
-- Confirm before discarding unsaved changes when closing a tab.
-- Move the Explorer into a drawer on narrow screens.
+- Browse nested folders in Explorer.
+- Open multiple files in tabs, switch between them, and horizontally scroll the tab bar.
+- Edit and save local files with Ctrl+S / Cmd+S.
+- Syntax highlighting and line numbers for common programming languages.
+- Confirm before discarding unsaved changes.
+- Use a responsive Explorer drawer on narrow screens.
 
-Not implemented yet: syntax highlighting, file creation, terminal, AI Agent integration, and extensions. Those will be added in later, separate increments.
+## Stage 2 — AI Agent basics
+
+- Connect to Mallss Nexus Route using its OpenAI-compatible Chat Completions API.
+- Default API base URL: https://ai-router.mallss-nexus.sbs/v1
+- Default model ID: Nexus-Free.
+- Test the API key and endpoint from AI Agent settings.
+- Include a limited workspace tree and the contents of up to eight open files as project context.
+- Ask questions about code or request file changes.
+- Review each proposed file side by side with the current contents before applying it. The agent never writes its proposal automatically.
+- API keys are stored with secure device storage. Common secret files such as .env, private keys, and service-account credentials are excluded from file-content context.
+
+To connect the agent, create an API key in the Mallss Nexus Route dashboard at https://ai-router.mallss-nexus.sbs/dashboard, open AI Agent in NexusIDE, enter the key, and save settings. Your prompts and the included workspace context are sent to the configured model when you submit a request. Avoid opening sensitive files that are not safe to share with the model.
+
+The AI Agent currently supports proposed file creation and updates, not file deletion. Review the changes before applying them.
+
+## Roadmap
+
+1. IDE foundation — complete initial editor, file browsing, tabs, syntax highlighting, and saving.
+2. AI Agent basics — gateway connection, workspace context, and review-before-apply file changes.
+3. Nexus Extensions — start with themes and snippets before evaluating broader compatibility.
+4. Developer tools — terminal and deeper language tooling.
+5. Android refinement — optimize the mobile editor around an Acode-inspired workflow.
 
 ## Technology
 
 - Flutter and Dart
+- code_text_field and highlight for the editor
 - file_selector for native file and directory pickers
+- http for gateway requests
+- flutter_secure_storage for the API key
+- shared_preferences for non-secret settings
 - path for cross-platform path handling
 
 ## Requirements
@@ -28,32 +53,28 @@ Not implemented yet: syntax highlighting, file creation, terminal, AI Agent inte
 
 ## First-time setup on Windows
 
-This repository starts with Dart source. Generate the native Windows and Android runner folders once, without overwriting the source code:
+This repository starts with Dart source. Generate the native Windows and Android runner folders once, without overwriting source code:
 
-1. Install Flutter and check `flutter doctor`.
-2. Clone the repository and open its directory in PowerShell.
+1. Install Flutter and check flutter doctor.
+2. Clone this repository and open its directory in PowerShell.
 3. Run:
 
-   `powershell -ExecutionPolicy Bypass -File .\tool\bootstrap_platforms.ps1`
+   ~~~powershell
+   powershell -ExecutionPolicy Bypass -File .\tool\bootstrap_platforms.ps1
+   ~~~
 
 4. Fetch dependencies:
 
-   `flutter pub get`
+   ~~~powershell
+   flutter pub get
+   ~~~
 
 5. Start the Windows app:
 
-   `flutter run -d windows`
+   ~~~powershell
+   flutter run -d windows
+   ~~~
 
-The script refuses to overwrite existing Windows or Android folders. Do not run it again after the native runners have been generated.
+The bootstrap script refuses to overwrite existing Windows or Android folders. Do not run it again after the native runners have been generated.
 
-For Android, connect an emulator or device, then use `flutter devices` and `flutter run -d <device-id>`. The full Acode-inspired mobile workflow is planned for a later stage.
-
-## Roadmap
-
-1. **IDE foundation** — workspace browsing, tabs, text editing, and saving.
-2. **AI Agent basics** — Nexus AI Gateway connection, project context, and reviewable file diffs.
-3. **Nexus Extensions** — start with themes and snippets before evaluating broader compatibility.
-4. **Developer tools** — terminal and deeper language tooling.
-5. **Android refinement** — optimize the mobile editor around an Acode-inspired workflow.
-
-This is an incremental project. Features in the roadmap should not be treated as already available.
+For Android, connect an emulator or device, then use flutter devices and flutter run -d DEVICE_ID. The full Acode-inspired mobile workflow is planned for a later stage.

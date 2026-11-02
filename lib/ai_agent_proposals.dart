@@ -32,7 +32,7 @@ class AiAgentProposalParser {
       if (json is Map) {
         final changes = <Map<String, String>>[];
         final list = json['changes'];
-        if (list is List) for (final item in list.take(8)) {
+        if (list is List) for (final item in list.take(16)) {
           if (item is Map && item['path'] is String && item['content'] is String) {
             changes.add({'path': item['path'] as String, 'content': item['content'] as String});
           }

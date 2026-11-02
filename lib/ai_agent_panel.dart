@@ -262,7 +262,10 @@ class _AiAgentPanelState extends State<AiAgentPanel> {
 
       final raw = await _client.complete(_baseUrl, _key.text.trim(), _modelId, requestMessages);
       final parsed = _parser.parse(raw);
-      final changes = await _parser.prepare(widget.workspacePath, parsed.changes);
+      final allowedChanges = parsed.changes
+          .where((change) => !_isSensitiveFile(change['path'] ?? ''))
+          .toList(growable: false);
+      final changes = await _parser.prepare(widget.workspacePath, allowedChanges);
       var answer = parsed.message;
       if (parsed.changes.isNotEmpty && changes.isEmpty) {
         answer += '\n\nNo changes were prepared. Open a workspace and use paths relative to it.';

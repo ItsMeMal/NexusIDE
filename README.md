@@ -14,9 +14,10 @@ NexusIDE is a cross-platform Flutter coding workspace. The Windows layout follow
 
 ## Stage 2 — AI Agent basics
 
-- Sign in or create an account using the same email and password as Mallss Nexus Route.
-- Gateway URL and model selection are fixed internally: https://ai-router.mallss-nexus.sbs/v1 and Nexus-Free.
-- NexusIDE creates an account-owned API key automatically after login and stores it with secure device storage.
+- Connect AI Agent through browser-based OAuth to your Mallss Nexus Route account; the gateway login happens in the browser, never inside NexusIDE.
+- The gateway opens a browser sign-in and explicit consent screen, then returns to NexusIDE through a local loopback callback.
+- Authorization Code + PKCE produces short-lived access and rotating refresh tokens. Tokens stay in secure device storage and refresh automatically; no API key entry or gateway URL configuration is exposed in the UI.
+- Disconnect revokes the OAuth session and its gateway-side app credential.
 - The Agent sends a limited workspace tree and up to eight open files as context when you submit a prompt.
 - Ask questions about code or request file changes.
 - Review proposed file changes before applying them; the Agent never writes a proposal automatically.
@@ -40,8 +41,10 @@ The AI Agent currently supports proposed file creation and updates, not file del
 - Flutter and Dart
 - code_text_field and highlight for the editor
 - file_selector for native file and directory pickers
-- http for gateway requests
-- flutter_secure_storage for the API key
+- http for gateway requests and OAuth token exchange
+- crypto for PKCE challenges
+- url_launcher for launching the system browser
+- flutter_secure_storage for access and refresh tokens
 - path for cross-platform path handling
 
 ## Requirements

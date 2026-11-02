@@ -70,6 +70,49 @@ class NexusIdeApp extends StatelessWidget {
         dividerColor: border,
         splashColor: accent.withOpacity(0.08),
         highlightColor: accent.withOpacity(0.04),
+        inputDecorationTheme: InputDecorationTheme(
+          filled: true,
+          fillColor: surface,
+          contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+          border: OutlineInputBorder(
+            borderRadius: BorderRadius.circular(10),
+            borderSide: const BorderSide(color: border),
+          ),
+          enabledBorder: OutlineInputBorder(
+            borderRadius: BorderRadius.circular(10),
+            borderSide: const BorderSide(color: border),
+          ),
+          focusedBorder: OutlineInputBorder(
+            borderRadius: BorderRadius.circular(10),
+            borderSide: const BorderSide(color: accent, width: 1.4),
+          ),
+        ),
+        filledButtonTheme: FilledButtonThemeData(
+          style: FilledButton.styleFrom(
+            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+          ),
+        ),
+        outlinedButtonTheme: OutlinedButtonThemeData(
+          style: OutlinedButton.styleFrom(
+            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+          ),
+        ),
+        tooltipTheme: TooltipThemeData(
+          waitDuration: const Duration(milliseconds: 350),
+          decoration: BoxDecoration(
+            color: surface,
+            border: Border.all(color: border),
+            borderRadius: BorderRadius.circular(8),
+          ),
+          textStyle: const TextStyle(color: foreground, fontSize: 11),
+        ),
+        snackBarTheme: SnackBarThemeData(
+          behavior: SnackBarBehavior.floating,
+          backgroundColor: surface,
+          contentTextStyle: const TextStyle(color: foreground, fontSize: 12),
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+        ),
         textTheme: ThemeData.dark().textTheme.apply(
               bodyColor: foreground,
               displayColor: foreground,
@@ -628,11 +671,26 @@ class WindowHeader extends StatelessWidget {
             Container(width: 1, height: 23, color: border),
             const SizedBox(width: 14),
             Expanded(
-              child: Text(
-                workspacePath == null ? 'No workspace open' : p.basename(workspacePath!),
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
-                style: const TextStyle(color: muted, fontSize: 12),
+              child: Row(
+                children: [
+                  Container(
+                    width: 7,
+                    height: 7,
+                    decoration: BoxDecoration(
+                      color: workspacePath == null ? muted : accent,
+                      shape: BoxShape.circle,
+                    ),
+                  ),
+                  const SizedBox(width: 8),
+                  Expanded(
+                    child: Text(
+                      workspacePath == null ? 'No workspace open' : p.basename(workspacePath!),
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: const TextStyle(color: muted, fontSize: 12),
+                    ),
+                  ),
+                ],
               ),
             ),
           ] else
@@ -643,8 +701,11 @@ class WindowHeader extends StatelessWidget {
               icon: const Icon(Icons.auto_awesome_rounded, size: 17),
               label: const Text('AI Agent'),
               style: TextButton.styleFrom(
-                foregroundColor: foreground,
-                textStyle: const TextStyle(fontSize: 12),
+                foregroundColor: accent,
+                backgroundColor: accent.withOpacity(0.10),
+                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 9),
+                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(9)),
+                textStyle: const TextStyle(fontSize: 12, fontWeight: FontWeight.w600),
               ),
             )
           else
@@ -661,6 +722,9 @@ class WindowHeader extends StatelessWidget {
               label: const Text('Open Folder'),
               style: TextButton.styleFrom(
                 foregroundColor: foreground,
+                backgroundColor: surface,
+                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 9),
+                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(9)),
                 textStyle: const TextStyle(fontSize: 12),
               ),
             )

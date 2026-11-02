@@ -1,6 +1,7 @@
 import 'dart:convert';
-import 'package:http/http.dart' as http;
+
 import 'package:flutter/material.dart';
+import 'package:http/http.dart' as http;
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:path/path.dart' as p;
 
@@ -41,9 +42,7 @@ class _AiAgentPanelState extends State<AiAgentPanel> {
   static const _emailName = 'nexuside.gateway.accountEmail';
   static const _displayNameName = 'nexuside.gateway.displayName';
 
-  final _url = TextEditingController(text: NexusGatewayClient.defaultBaseUrl);
   final _key = TextEditingController();
-  final _model = TextEditingController(text: NexusGatewayClient.defaultModel);
   final _email = TextEditingController();
   final _password = TextEditingController();
   final _prompt = TextEditingController();
@@ -66,7 +65,7 @@ class _AiAgentPanelState extends State<AiAgentPanel> {
   String? _status;
   bool _statusError = false;
 
-  String get _baseUrl => _client.normalizeUrl(_url.text);
+  String get _baseUrl => NexusGatewayClient.defaultBaseUrl;
   String get _modelId => NexusGatewayClient.defaultModel;
 
   @override
@@ -77,9 +76,7 @@ class _AiAgentPanelState extends State<AiAgentPanel> {
 
   @override
   void dispose() {
-    _url.dispose();
     _key.dispose();
-    _model.dispose();
     _email.dispose();
     _password.dispose();
     _prompt.dispose();

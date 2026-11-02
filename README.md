@@ -18,6 +18,7 @@ NexusIDE is a cross-platform Flutter coding workspace. The Windows layout follow
 - The gateway opens a browser sign-in and explicit consent screen, then returns to NexusIDE through a local loopback callback.
 - Authorization Code + PKCE produces short-lived access and rotating refresh tokens. Tokens stay in secure device storage and refresh automatically; no API key entry or gateway URL configuration is exposed in the UI.
 - Disconnect revokes the OAuth session and its gateway-side app credential.
+- Choose any model exposed by the gateway from the Agent composer; the model list can be refreshed and the selection is remembered on the device.
 - The Agent sends a limited workspace tree and up to eight open files as context when you submit a prompt.
 - Ask questions about code or request file changes.
 - Review proposed file changes before applying them; the Agent never writes a proposal automatically.

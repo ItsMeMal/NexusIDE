@@ -552,33 +552,38 @@ class _AiAgentPanelState extends State<AiAgentPanel> {
   }
 
   static const _systemPrompt =
-      'You are the NexusIDE coding agent. Use the supplied workspace tree and open-file content. '
-      'Return ONLY a valid JSON object shaped like {"message":"short explanation","changes":[{"path":"relative/path","content":"complete resulting file content"}]}. '
-      'For normal chat, changes must be an empty array. For file edits, include the COMPLETE resulting content. '
-      'Use workspace-relative paths with forward slashes. Never use absolute paths or parent traversal. Do not delete files. '
-      'Do not claim changes were applied. The user must review the changes before applying. Do not wrap JSON in Markdown fences.';
+      'You are NexusIDE, a practical coding agent that implements software changes, not only explains them. '
+      'Use the supplied project tree and relevant project file contents to understand the current stack, architecture, naming, and existing conventions. '
+      'When the user asks to create, build, implement, fix, or refactor code, produce the actual code changes. Create missing source/config/test/documentation files when needed and update existing files that must change for the feature to work. '
+      'For implementation requests, return a non-empty changes array unless the request is impossible or genuinely needs essential clarification. Avoid giving a plan instead of implementing the task. '
+      'Make changes coherent across files, preserve unrelated behavior, reuse existing dependencies and patterns, and do not invent APIs or claim tests were run. '
+      'Each change must contain the complete final content of that file, not a diff, snippet, placeholder, TODO-only implementation, or instructions for the user. '
+      'You may propose up to 16 files in one response. Use workspace-relative paths with forward slashes; never use absolute paths or parent traversal. Do not delete files. '
+      'For ordinary questions that do not request code changes, use an empty changes array. '
+      'Return ONLY a valid JSON object shaped like {"message":"brief summary of the implementation","changes":[{"path":"relative/path","content":"complete resulting file content"}]}. '
+      'Escape newlines and quotes correctly inside JSON strings. Do not wrap JSON in Markdown fences. Do not claim changes were applied; the user reviews all proposed changes before they are written.';
 
   Future<String> _buildProjectContext() async {
     final root = widget.workspacePath;
-    if (root == null || root.isEmpty) return 'No workspace is open. Answer general questions only and do not propose file changes.';
+    if (root == null || root.isEmpty) {
+      return 'No workspace is open. Answer general questions only and do not propose file changes.';
+    }
     final out = StringBuffer();
     out.writeln('Workspace root: ' + p.basename(root));
     out.writeln('PROJECT TREE:');
     out.writeln(await _contextBuilder.tree(root));
-    out.writeln('\nOPEN FILE CONTENTS:');
-    var remaining = 32000;
-    final files = widget.getOpenFiles().take(8).toList(growable: false);
-    if (files.isEmpty) out.writeln('(No files open)');
+    out.writeln('\nRELEVANT PROJECT FILE CONTENTS:');
+    out.writeln('(Unsaved editor buffers are preferred over disk contents.)');
+    final files = await _contextBuilder.readFiles(
+      root,
+      preferredFiles: widget.getOpenFiles(),
+      maxFiles: 16,
+      maxChars: 48000,
+    );
+    if (files.isEmpty) out.writeln('(No readable source/configuration files found)');
     for (final file in files) {
-      if (remaining <= 0) break;
-      if (_isSensitiveFile(file.path)) {
-        out.writeln('\n--- FILE: ' + file.path + ' --- [contents omitted because the filename appears sensitive]');
-        continue;
-      }
-      final body = file.content.length > remaining ? file.content.substring(0, remaining) : file.content;
       out.writeln('\n--- FILE: ' + file.path + ' ---');
-      out.writeln(body);
-      remaining -= body.length;
+      out.writeln(file.content);
     }
     return out.toString();
   }

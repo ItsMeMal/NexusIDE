@@ -1346,10 +1346,16 @@ class StatusBar extends StatelessWidget {
 }
 
 String languageForName(String filename) {
-  switch (p.extension(filename).toLowerCase()) {
+  final name = p.basename(filename).toLowerCase();
+  if (name == 'dockerfile' || name.startsWith('dockerfile.')) {
+    return 'Dockerfile';
+  }
+
+  switch (p.extension(name)) {
     case '.dart':
       return 'Dart';
     case '.js':
+    case '.jsx':
     case '.mjs':
     case '.cjs':
       return 'JavaScript';
@@ -1359,16 +1365,68 @@ String languageForName(String filename) {
     case '.py':
       return 'Python';
     case '.html':
+    case '.htm':
       return 'HTML';
+    case '.xml':
+      return 'XML';
+    case '.svg':
+      return 'SVG';
     case '.css':
+    case '.scss':
+    case '.less':
       return 'CSS';
     case '.json':
+    case '.jsonc':
       return 'JSON';
     case '.yaml':
     case '.yml':
       return 'YAML';
     case '.md':
+    case '.markdown':
       return 'Markdown';
+    case '.java':
+      return 'Java';
+    case '.kt':
+    case '.kts':
+      return 'Kotlin';
+    case '.c':
+      return 'C';
+    case '.h':
+    case '.cpp':
+    case '.cc':
+    case '.cxx':
+    case '.hpp':
+      return 'C++';
+    case '.cs':
+      return 'C#';
+    case '.go':
+      return 'Go';
+    case '.rs':
+      return 'Rust';
+    case '.php':
+      return 'PHP';
+    case '.rb':
+      return 'Ruby';
+    case '.lua':
+      return 'Lua';
+    case '.swift':
+      return 'Swift';
+    case '.sql':
+      return 'SQL';
+    case '.sh':
+    case '.bash':
+      return 'Shell Script';
+    case '.ps1':
+    case '.psm1':
+      return 'PowerShell';
+    case '.ini':
+      return 'INI';
+    case '.cfg':
+      return 'Configuration';
+    case '.properties':
+      return 'Properties';
+    case '.toml':
+      return 'TOML';
     default:
       return 'Plain Text';
   }

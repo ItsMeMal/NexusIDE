@@ -34,6 +34,9 @@ import 'package:highlight/languages/xml.dart' as lang_xml;
 import 'package:highlight/languages/yaml.dart' as lang_yaml;
 import 'package:path/path.dart' as p;
 
+import 'ai_agent_context.dart';
+import 'ai_agent_panel.dart';
+
 const bg = Color(0xFF0D1117);
 const panel = Color(0xFF111821);
 const surface = Color(0xFF151F2B);
@@ -190,6 +193,7 @@ class _IdeHomeState extends State<IdeHome> {
   final List<OpenDocument> documents = [];
   String? workspacePath;
   int activeIndex = -1;
+  bool showAgentPanel = false;
 
   OpenDocument? get activeDocument =>
       activeIndex >= 0 && activeIndex < documents.length
@@ -202,6 +206,76 @@ class _IdeHomeState extends State<IdeHome> {
       document.dispose();
     }
     super.dispose();
+  }
+
+  List<AiAgentContextFile> getOpenFileContexts() {
+    final workspace = workspacePath;
+    if (workspace == null) return [];
+    final root = p.normalize(p.absolute(workspace));
+    final active = activeDocument;
+    final ordered = <OpenDocument>[
+      if (active != null) active,
+      ...documents.where((item) => !identical(item, active)),
+    ];
+    final result = <AiAgentContextFile>[];
+    for (final item in ordered) {
+      final path = p.normalize(p.absolute(item.path));
+      if (!p.isWithin(root, path)) continue;
+      result.add(AiAgentContextFile(p.relative(path, from: root), item.controller.text));
+      if (result.length == 8) break;
+    }
+    return result;
+  }
+
+  Future<void> applyAgentChanges(Map<String, String> changes) async {
+    final workspace = workspacePath;
+    if (workspace == null || workspace.trim().isEmpty) {
+      throw StateError('Open a workspace before applying AI changes.');
+    }
+    final root = p.normalize(p.absolute(workspace));
+    final targets = <MapEntry<String, String>>[];
+    for (final change in changes.entries) {
+      final relative = change.key.trim().replaceAll(String.fromCharCode(92), '/');
+      final segments = relative.split('/');
+      if (relative.isEmpty ||
+          relative.startsWith('/') ||
+          relative.contains(':') ||
+          segments.any((part) => part.isEmpty || part == '.' || part == '..') ||
+          segments.contains('.git') ||
+          segments.contains('node_modules')) {
+        throw StateError('Rejected unsafe AI path: ' + change.key);
+      }
+      final target = p.normalize(p.join(root, segments.join(p.separator)));
+      if (!p.isWithin(root, target) || p.equals(root, target)) {
+        throw StateError('Rejected path outside workspace: ' + change.key);
+      }
+      if (await Directory(target).exists()) {
+        throw StateError('Target is a directory: ' + change.key);
+      }
+      targets.add(MapEntry(target, change.value));
+    }
+
+    for (final target in targets) {
+      await Directory(p.dirname(target.key)).create(recursive: true);
+      await File(target.key).writeAsString(target.value, flush: true);
+      final index = documents.indexWhere((doc) => p.equals(doc.path, target.key));
+      if (index >= 0) {
+        final document = documents[index];
+        document.dirty = true;
+        document.controller.text = target.value;
+        document.dirty = false;
+      }
+    }
+
+    if (!mounted || targets.isEmpty) return;
+    final firstPath = targets.first.key;
+    final firstIndex = documents.indexWhere((doc) => p.equals(doc.path, firstPath));
+    if (firstIndex >= 0) {
+      setState(() => activeIndex = firstIndex);
+    } else {
+      await openFile(firstPath);
+    }
+    showMessage('Applied ' + targets.length.toString() + ' reviewed AI change(s).');
   }
 
   Future<void> openFolder() async {
@@ -373,6 +447,27 @@ class _IdeHomeState extends State<IdeHome> {
                       onOpenFolder: openFolder,
                       onOpenFile: openFiles,
                       onSave: saveFile,
+                      onToggleAgent: () {
+                        if (constraints.maxWidth < 1080) {
+                          showModalBottomSheet<void>(
+                            context: context,
+                            isScrollControlled: true,
+                            useSafeArea: true,
+                            backgroundColor: panel,
+                            builder: (sheetContext) => SizedBox(
+                              height: MediaQuery.of(sheetContext).size.height * 0.88,
+                              child: AiAgentPanel(
+                                workspacePath: workspacePath,
+                                getOpenFiles: getOpenFileContexts,
+                                onApplyChanges: applyAgentChanges,
+                                onClose: () => Navigator.of(sheetContext).pop(),
+                              ),
+                            ),
+                          );
+                        } else {
+                          setState(() => showAgentPanel = !showAgentPanel);
+                        }
+                      },
                     ),
                     Expanded(
                       child: Row(
@@ -408,6 +503,16 @@ class _IdeHomeState extends State<IdeHome> {
                               ],
                             ),
                           ),
+                          if (showAgentPanel && constraints.maxWidth >= 1080)
+                            SizedBox(
+                              width: 360,
+                              child: AiAgentPanel(
+                                workspacePath: workspacePath,
+                                getOpenFiles: getOpenFileContexts,
+                                onApplyChanges: applyAgentChanges,
+                                onClose: () => setState(() => showAgentPanel = false),
+                              ),
+                            ),
                         ],
                       ),
                     ),
@@ -432,6 +537,7 @@ class WindowHeader extends StatelessWidget {
     required this.onOpenFolder,
     required this.onOpenFile,
     required this.onSave,
+    required this.onToggleAgent,
     super.key,
   });
 
@@ -443,6 +549,7 @@ class WindowHeader extends StatelessWidget {
   final VoidCallback onOpenFolder;
   final VoidCallback onOpenFile;
   final VoidCallback onSave;
+  final VoidCallback onToggleAgent;
 
   @override
   Widget build(BuildContext context) {
@@ -486,6 +593,23 @@ class WindowHeader extends StatelessWidget {
             ),
           ] else
             const Spacer(),
+          if (!compact)
+            TextButton.icon(
+              onPressed: onToggleAgent,
+              icon: const Icon(Icons.auto_awesome_rounded, size: 17),
+              label: const Text('AI Agent'),
+              style: TextButton.styleFrom(
+                foregroundColor: foreground,
+                textStyle: const TextStyle(fontSize: 12),
+              ),
+            )
+          else
+            IconButton(
+              tooltip: 'AI Agent',
+              onPressed: onToggleAgent,
+              visualDensity: VisualDensity.compact,
+              icon: const Icon(Icons.auto_awesome_rounded, size: 19),
+            ),
           if (!compact)
             TextButton.icon(
               onPressed: onOpenFolder,

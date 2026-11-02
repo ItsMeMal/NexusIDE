@@ -724,12 +724,12 @@ class _AiAgentPanelState extends State<AiAgentPanel> {
             itemCount: _messages.length + (_loading ? 1 : 0),
             itemBuilder: (context, index) {
               if (_loading && index == _messages.length) {
-                return const Padding(
-                  padding: EdgeInsets.all(10),
+                return Padding(
+                  padding: const EdgeInsets.all(10),
                   child: Row(children: [
-                    SizedBox(width: 14, height: 14, child: CircularProgressIndicator(strokeWidth: 2, color: _agentAccent)),
-                    SizedBox(width: 8),
-                    Text(_modelId + ' is thinking…', style: TextStyle(color: _agentMuted, fontSize: 11)),
+                    const SizedBox(width: 14, height: 14, child: CircularProgressIndicator(strokeWidth: 2, color: _agentAccent)),
+                    const SizedBox(width: 8),
+                    Text(_modelId + ' is thinking…', style: const TextStyle(color: _agentMuted, fontSize: 11)),
                   ]),
                 );
               }

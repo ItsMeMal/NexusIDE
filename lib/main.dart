@@ -1384,13 +1384,6 @@ class CodeEditor extends StatelessWidget {
                 fontSize: 13.5,
                 height: 1.65,
               ),
-              decoration: const InputDecoration(
-                isCollapsed: true,
-                border: InputBorder.none,
-                contentPadding: EdgeInsets.zero,
-                hintText: 'Start writing...',
-                hintStyle: TextStyle(color: muted),
-              ),
             ),
           ),
         ),

@@ -1,6 +1,11 @@
+import 'dart:async';
 import 'dart:convert';
+import 'dart:io';
+import 'dart:math' as math;
 
+import 'package:crypto/crypto.dart';
 import 'package:flutter/material.dart';
+import 'package:url_launcher/url_launcher.dart';
 import 'package:http/http.dart' as http;
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:path/path.dart' as p;
@@ -36,15 +41,15 @@ class AiAgentPanel extends StatefulWidget {
 }
 
 class _AiAgentPanelState extends State<AiAgentPanel> {
-  static const _keyName = 'nexuside.gateway.apiKey';
-  static const _sessionName = 'nexuside.gateway.sessionCookie';
-  static const _apiKeyIdName = 'nexuside.gateway.apiKeyId';
+  static const _accessTokenName = 'nexuside.oauth.accessToken';
+  static const _refreshTokenName = 'nexuside.oauth.refreshToken';
+  static const _expiresAtName = 'nexuside.oauth.expiresAt';
   static const _emailName = 'nexuside.gateway.accountEmail';
   static const _displayNameName = 'nexuside.gateway.displayName';
+  static const _legacyKeyName = 'nexuside.gateway.apiKey';
+  static const _legacySessionName = 'nexuside.gateway.sessionCookie';
+  static const _legacyApiKeyIdName = 'nexuside.gateway.apiKeyId';
 
-  final _key = TextEditingController();
-  final _email = TextEditingController();
-  final _password = TextEditingController();
   final _prompt = TextEditingController();
   final _scroll = ScrollController();
   final _secureStorage = FlutterSecureStorage();
@@ -56,10 +61,10 @@ class _AiAgentPanelState extends State<AiAgentPanel> {
   bool _loading = false;
   bool _testing = false;
   bool _authBusy = false;
-  bool _registerMode = false;
   bool _signedIn = false;
-  String? _sessionCookie;
-  String? _apiKeyId;
+  String? _accessToken;
+  String? _refreshToken;
+  int? _accessExpiresAt;
   String? _accountEmail;
   String? _displayName;
   String? _status;
@@ -77,9 +82,6 @@ class _AiAgentPanelState extends State<AiAgentPanel> {
 
   @override
   void dispose() {
-    _key.dispose();
-    _email.dispose();
-    _password.dispose();
     _prompt.dispose();
     _scroll.dispose();
     super.dispose();
@@ -87,54 +89,71 @@ class _AiAgentPanelState extends State<AiAgentPanel> {
 
   Future<void> _loadSettings() async {
     try {
-      final key = await _secureStorage.read(key: _keyName);
-      final cookie = await _secureStorage.read(key: _sessionName);
-      final keyId = await _secureStorage.read(key: _apiKeyIdName);
-      final email = await _secureStorage.read(key: _emailName);
-      final displayName = await _secureStorage.read(key: _displayNameName);
-
-      if (key == null || cookie == null || email == null) {
-        // Discard a legacy manually-entered key: NexusIDE now signs in through an account.
-        if (key != null && (cookie == null || email == null)) {
-          await _secureStorage.delete(key: _keyName);
-        }
+      for (final legacy in <String>[_legacyKeyName, _legacySessionName, _legacyApiKeyIdName]) {
+        await _secureStorage.delete(key: legacy);
+      }
+      var accessToken = await _secureStorage.read(key: _accessTokenName);
+      var refreshToken = await _secureStorage.read(key: _refreshTokenName);
+      final expiresAt = int.tryParse(await _secureStorage.read(key: _expiresAtName) ?? '');
+      final savedEmail = await _secureStorage.read(key: _emailName);
+      final savedDisplayName = await _secureStorage.read(key: _displayNameName);
+      if (refreshToken == null || refreshToken.isEmpty) {
+        await _clearOAuthStorage();
         if (!mounted) return;
         setState(() {
           _signedIn = false;
+          _accessToken = null;
+          _refreshToken = null;
+          _accessExpiresAt = null;
           _status = null;
         });
         return;
       }
-
-      final response = await http.get(
-        Uri.parse(_gatewayOrigin + '/auth/me'),
-        headers: {'Cookie': cookie, 'Accept': 'application/json'},
-      ).timeout(const Duration(seconds: 20));
-
-      if (!mounted) return;
-      if (response.statusCode >= 200 && response.statusCode < 300) {
-        setState(() {
-          _key.text = key;
-          _sessionCookie = cookie;
-          _apiKeyId = keyId;
-          _accountEmail = email;
-          _displayName = displayName ?? email;
-          _signedIn = true;
-          _status = null;
-        });
-      } else {
-        setState(() {
-          _signedIn = false;
-          _accountEmail = email;
-          _status = 'Your account session has expired. Sign in again to reconnect.';
-          _statusError = true;
-        });
+      if (accessToken == null || expiresAt == null ||
+          expiresAt <= DateTime.now().millisecondsSinceEpoch + 60000) {
+        accessToken = await _refreshAccessToken();
+        refreshToken = await _secureStorage.read(key: _refreshTokenName) ?? refreshToken;
       }
+      var response = await http.get(
+        Uri.parse(_gatewayOrigin + '/auth/oauth/me'),
+        headers: {'Authorization': 'Bearer ' + accessToken, 'Accept': 'application/json'},
+      ).timeout(const Duration(seconds: 20));
+      if (response.statusCode == 401) {
+        accessToken = await _refreshAccessToken();
+        refreshToken = await _secureStorage.read(key: _refreshTokenName) ?? refreshToken;
+        response = await http.get(
+          Uri.parse(_gatewayOrigin + '/auth/oauth/me'),
+          headers: {'Authorization': 'Bearer ' + accessToken, 'Accept': 'application/json'},
+        ).timeout(const Duration(seconds: 20));
+      }
+      final data = _decodeResponse(response.body);
+      final user = data?['user'];
+      if (response.statusCode < 200 || response.statusCode >= 300 || user is! Map) {
+        throw Exception(_responseError(response));
+      }
+      final email = user['email'] is String ? user['email'] as String : savedEmail ?? '';
+      final displayName = user['display_name'] is String
+          ? user['display_name'] as String
+          : savedDisplayName ?? email;
+      await _secureStorage.write(key: _emailName, value: email);
+      await _secureStorage.write(key: _displayNameName, value: displayName);
+      final currentExpiry = int.tryParse(await _secureStorage.read(key: _expiresAtName) ?? '');
+      if (!mounted) return;
+      setState(() {
+        _accessToken = accessToken;
+        _refreshToken = refreshToken;
+        _accessExpiresAt = currentExpiry;
+        _accountEmail = email;
+        _displayName = displayName;
+        _signedIn = true;
+        _status = null;
+        _statusError = false;
+      });
     } catch (error) {
       if (!mounted) return;
       setState(() {
         _signedIn = false;
-        _status = 'Could not restore account session: ' + _client.friendlyError(error);
+        _status = 'Could not restore the gateway connection: ' + _client.friendlyError(error);
         _statusError = true;
       });
     }
@@ -173,193 +192,200 @@ class _AiAgentPanelState extends State<AiAgentPanel> {
     return pair;
   }
 
-  Future<void> _authenticate() async {
-    final email = _email.text.trim().toLowerCase();
-    final password = _password.text;
-    if (!RegExp(r'^[^\s@]+@[^\s@]+\.[^\s@]+$').hasMatch(email)) {
-      _setStatus('Enter a valid email address.', true);
-      return;
-    }
-    if (password.length < 10 || password.length > 128) {
-      _setStatus('Password must contain 10–128 characters.', true);
-      return;
-    }
+  String _randomUrlToken(int byteLength) {
+    final random = math.Random.secure();
+    return base64UrlEncode(List<int>.generate(byteLength, (_) => random.nextInt(256)))
+        .replaceAll('=', '');
+  }
 
+  Future<http.Response> _oauthFormPost(Map<String, String> values, {String endpoint = '/auth/oauth/token'}) {
+    return http.post(
+      Uri.parse(_gatewayOrigin + endpoint),
+      headers: {'Content-Type': 'application/x-www-form-urlencoded', 'Accept': 'application/json'},
+      body: Uri(queryParameters: values).query,
+    ).timeout(const Duration(seconds: 30));
+  }
+
+  Future<String> _saveOAuthTokens(Map<String, dynamic> data) async {
+    final accessToken = data['access_token'];
+    final refreshToken = data['refresh_token'];
+    final expiresIn = data['expires_in'];
+    if (accessToken is! String || accessToken.isEmpty ||
+        refreshToken is! String || refreshToken.isEmpty ||
+        expiresIn is! num || expiresIn <= 0) {
+      throw Exception('Gateway returned an invalid OAuth token response.');
+    }
+    final expiresAt = DateTime.now().millisecondsSinceEpoch + expiresIn.toInt() * 1000;
+    await _secureStorage.write(key: _accessTokenName, value: accessToken);
+    await _secureStorage.write(key: _refreshTokenName, value: refreshToken);
+    await _secureStorage.write(key: _expiresAtName, value: expiresAt.toString());
+    final user = data['user'];
+    if (user is Map) {
+      if (user['email'] is String) await _secureStorage.write(key: _emailName, value: user['email'] as String);
+      if (user['display_name'] is String) await _secureStorage.write(key: _displayNameName, value: user['display_name'] as String);
+    }
+    _accessToken = accessToken;
+    _refreshToken = refreshToken;
+    _accessExpiresAt = expiresAt;
+    return accessToken;
+  }
+
+  Future<String> _refreshAccessToken() async {
+    final refreshToken = await _secureStorage.read(key: _refreshTokenName);
+    if (refreshToken == null || refreshToken.isEmpty) throw Exception('No gateway refresh token. Connect again.');
+    final response = await _oauthFormPost({
+      'grant_type': 'refresh_token',
+      'client_id': 'nexuside',
+      'refresh_token': refreshToken,
+    });
+    if (response.statusCode < 200 || response.statusCode >= 300) throw Exception(_responseError(response));
+    final data = _decodeResponse(response.body);
+    if (data == null) throw Exception('Gateway returned invalid OAuth token data.');
+    return _saveOAuthTokens(data);
+  }
+
+  Future<String> _validAccessToken() async {
+    final accessToken = _accessToken ?? await _secureStorage.read(key: _accessTokenName);
+    final expiresAt = _accessExpiresAt ?? int.tryParse(await _secureStorage.read(key: _expiresAtName) ?? '');
+    if (accessToken != null && expiresAt != null &&
+        expiresAt > DateTime.now().millisecondsSinceEpoch + 60000) return accessToken;
+    return _refreshAccessToken();
+  }
+
+  Future<void> _clearOAuthStorage() async {
+    for (final key in <String>[
+      _accessTokenName, _refreshTokenName, _expiresAtName,
+      _legacyKeyName, _legacySessionName, _legacyApiKeyIdName, _emailName, _displayNameName,
+    ]) {
+      try { await _secureStorage.delete(key: key); } catch (_) {}
+    }
+  }
+
+  Future<void> _authenticate() async {
     setState(() {
       _authBusy = true;
-      _status = _registerMode ? 'Creating your account…' : 'Signing in…';
+      _status = 'Opening Mallss Nexus Route in your browser…';
       _statusError = false;
     });
-
-    String? newCookie;
-    String? newKeyId;
+    HttpServer? callbackServer;
     try {
-      final endpoint = _registerMode ? '/auth/register' : '/auth/login';
-      final response = await http.post(
-        Uri.parse(_baseUrl + endpoint),
-        headers: {'Content-Type': 'application/json', 'Accept': 'application/json'},
-        body: jsonEncode({
-          'email': email,
-          'password': password,
-          'displayName': email.split('@').first,
-        }),
-      ).timeout(const Duration(seconds: 30));
-
-      final responseData = _decodeResponse(response.body);
-      if (response.statusCode < 200 || response.statusCode >= 300) {
-        throw Exception(_responseError(response));
+      final state = _randomUrlToken(32);
+      final verifier = _randomUrlToken(48);
+      final challenge = base64UrlEncode(sha256.convert(utf8.encode(verifier)).bytes).replaceAll('=', '');
+      callbackServer = await HttpServer.bind(InternetAddress.loopbackIPv4, 0);
+      final redirectUri = Uri(scheme: 'http', host: '127.0.0.1', port: callbackServer.port, path: '/oauth/callback');
+      final callbackCompleter = Completer<Uri>();
+      callbackServer.listen((request) async {
+        if (request.method != 'GET' || request.uri.path != '/oauth/callback') {
+          request.response.statusCode = HttpStatus.notFound;
+          await request.response.close();
+          return;
+        }
+        final callback = request.uri;
+        request.response.statusCode = HttpStatus.ok;
+        request.response.headers.contentType = ContentType.html;
+        request.response.headers.set('Cache-Control', 'no-store');
+        request.response.write(
+          '<!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>NexusIDE connected</title>'
+          '<style>body{background:#0d1117;color:#e6edf3;font:16px system-ui;display:grid;place-items:center;min-height:90vh}.card{max-width:420px;padding:28px;border:1px solid #30363d;border-radius:16px}h1{font-size:22px}p{color:#9da7b3}</style></head>'
+          '<body><main class="card"><h1>Return to NexusIDE</h1><p>Authorization response received. You can close this browser tab and return to the app.</p></main></body></html>',
+        );
+        await request.response.close();
+        if (!callbackCompleter.isCompleted) callbackCompleter.complete(callback);
+      });
+      final authorizeUri = Uri.parse(_gatewayOrigin + '/auth/oauth/authorize').replace(queryParameters: {
+        'client_id': 'nexuside',
+        'response_type': 'code',
+        'redirect_uri': redirectUri.toString(),
+        'scope': 'models:read inference',
+        'state': state,
+        'code_challenge': challenge,
+        'code_challenge_method': 'S256',
+      });
+      final opened = await launchUrl(authorizeUri, mode: LaunchMode.externalApplication);
+      if (!opened) throw Exception('Could not open the system browser.');
+      if (mounted) _setStatus('Sign in and approve NexusIDE in your browser…');
+      final callback = await callbackCompleter.future.timeout(const Duration(minutes: 5));
+      if (callback.queryParameters['state'] != state) throw Exception('OAuth state validation failed. Connect again.');
+      final oauthError = callback.queryParameters['error'];
+      if (oauthError != null) {
+        if (oauthError == 'access_denied') throw Exception('Connection was cancelled.');
+        throw Exception('Gateway authorization failed: ' + oauthError);
       }
-      newCookie = _cookieFromResponse(response);
-      if (newCookie == null) {
-        throw Exception('The gateway did not return an account session cookie.');
+      final code = callback.queryParameters['code'];
+      if (code == null || code.isEmpty) throw Exception('Gateway returned no authorization code.');
+      final tokenResponse = await _oauthFormPost({
+        'grant_type': 'authorization_code',
+        'client_id': 'nexuside',
+        'code': code,
+        'redirect_uri': redirectUri.toString(),
+        'code_verifier': verifier,
+      });
+      if (tokenResponse.statusCode < 200 || tokenResponse.statusCode >= 300) throw Exception(_responseError(tokenResponse));
+      final tokenData = _decodeResponse(tokenResponse.body);
+      if (tokenData == null) throw Exception('Gateway returned invalid OAuth token data.');
+      final accessToken = await _saveOAuthTokens(tokenData);
+      final user = tokenData['user'];
+      final email = user is Map && user['email'] is String ? user['email'] as String : '';
+      final displayName = user is Map && user['display_name'] is String ? user['display_name'] as String : email;
+      for (final key in <String>[_legacyKeyName, _legacySessionName, _legacyApiKeyIdName]) {
+        await _secureStorage.delete(key: key);
       }
-
-      final userData = responseData?['user'];
-      final responseEmail = userData is Map && userData['email'] is String
-          ? (userData['email'] as String).toLowerCase()
-          : email;
-      final displayName = userData is Map && userData['display_name'] is String
-          ? userData['display_name'] as String
-          : email.split('@').first;
-
-      // If the previous account session is still valid, revoke its app key before replacing it.
-      final previousCookie = await _secureStorage.read(key: _sessionName);
-      final previousKeyId = await _secureStorage.read(key: _apiKeyIdName);
-      final previousEmail = await _secureStorage.read(key: _emailName);
-      if (previousKeyId != null && previousCookie != null) {
-        final cookieToUse = previousEmail?.toLowerCase() == responseEmail
-            ? newCookie
-            : previousCookie;
-        try {
-          await http.delete(
-            Uri.parse(_gatewayOrigin + '/account/api-keys/' + previousKeyId),
-            headers: {'Cookie': cookieToUse, 'Accept': 'application/json'},
-          ).timeout(const Duration(seconds: 15));
-        } catch (_) {}
-      }
-
-      final keyResponse = await http.post(
-        Uri.parse(_gatewayOrigin + '/account/api-keys'),
-        headers: {
-          'Cookie': newCookie,
-          'Content-Type': 'application/json',
-          'Accept': 'application/json',
-        },
-        body: jsonEncode({'name': 'NexusIDE'}),
-      ).timeout(const Duration(seconds: 30));
-
-      final keyData = _decodeResponse(keyResponse.body);
-      if (keyResponse.statusCode < 200 || keyResponse.statusCode >= 300) {
-        throw Exception(_responseError(keyResponse));
-      }
-      final rawKey = keyData?['key'];
-      final keyId = keyData?['id'];
-      if (rawKey is! String || rawKey.isEmpty || keyId == null) {
-        throw Exception('The gateway did not return a usable NexusIDE API key.');
-      }
-      newKeyId = keyId.toString();
-
-      await _secureStorage.write(key: _keyName, value: rawKey);
-      await _secureStorage.write(key: _sessionName, value: newCookie);
-      await _secureStorage.write(key: _apiKeyIdName, value: newKeyId);
-      await _secureStorage.write(key: _emailName, value: responseEmail);
-      await _secureStorage.write(key: _displayNameName, value: displayName);
-
       if (!mounted) return;
-      _password.clear();
+      _prompt.clear();
       setState(() {
-        _key.text = rawKey;
-        _sessionCookie = newCookie;
-        _apiKeyId = newKeyId;
-        _accountEmail = responseEmail;
+        _accessToken = accessToken;
+        _accountEmail = email;
         _displayName = displayName;
         _signedIn = true;
         _authBusy = false;
-        _status = 'Signed in. Nexus-Free is ready.';
+        _status = 'Connected to Mallss Nexus Route. Nexus-Free is ready.';
         _statusError = false;
         _messages
           ..clear()
-          ..add(_ChatMessage(
-            'assistant',
-            'You are signed in. Ask me to explain your code or propose a change; nothing is written until you review it.',
-          ));
+          ..add(_ChatMessage('assistant', 'Connected to your gateway account. Ask me to explain your code or propose a change; nothing is written until you review it.'));
       });
       _scrollToBottom();
     } catch (error) {
-      if (newCookie != null) {
-        try {
-          if (newKeyId != null) {
-            await http.delete(
-              Uri.parse(_gatewayOrigin + '/account/api-keys/' + newKeyId),
-              headers: {'Cookie': newCookie, 'Accept': 'application/json'},
-            ).timeout(const Duration(seconds: 10));
-          }
-          await http.post(
-            Uri.parse(_gatewayOrigin + '/auth/logout'),
-            headers: {'Cookie': newCookie},
-          ).timeout(const Duration(seconds: 10));
-        } catch (_) {}
-      }
       if (!mounted) return;
       setState(() {
         _authBusy = false;
         _status = _client.friendlyError(error);
         _statusError = true;
       });
+    } finally {
+      await callbackServer?.close(force: true);
     }
   }
 
   Future<void> _logout() async {
-    final cookie = _sessionCookie;
-    final keyId = _apiKeyId;
+    final refreshToken = _refreshToken ?? await _secureStorage.read(key: _refreshTokenName);
+    setState(() { _authBusy = true; _status = 'Disconnecting gateway account…'; _statusError = false; });
     var revoked = false;
-    setState(() {
-      _authBusy = true;
-      _status = 'Signing out…';
-      _statusError = false;
-    });
-    if (cookie != null && keyId != null) {
+    if (refreshToken != null && refreshToken.isNotEmpty) {
       try {
-        final response = await http.delete(
-          Uri.parse(_gatewayOrigin + '/account/api-keys/' + keyId),
-          headers: {'Cookie': cookie, 'Accept': 'application/json'},
-        ).timeout(const Duration(seconds: 15));
+        final response = await _oauthFormPost({
+          'token': refreshToken,
+          'token_type_hint': 'refresh_token',
+        }, endpoint: '/auth/oauth/revoke');
         revoked = response.statusCode >= 200 && response.statusCode < 300;
       } catch (_) {}
     }
-    if (cookie != null) {
-      try {
-        await http.post(
-          Uri.parse(_gatewayOrigin + '/auth/logout'),
-          headers: {'Cookie': cookie},
-        ).timeout(const Duration(seconds: 15));
-      } catch (_) {}
-    }
-    for (final name in <String>[_keyName, _sessionName, _apiKeyIdName, _emailName, _displayNameName]) {
-      try {
-        await _secureStorage.delete(key: name);
-      } catch (_) {}
-    }
+    await _clearOAuthStorage();
     if (!mounted) return;
     setState(() {
-      _key.clear();
-      _sessionCookie = null;
-      _apiKeyId = null;
-      _accountEmail = null;
-      _displayName = null;
-      _signedIn = false;
-      _authBusy = false;
-      _messages.clear();
-      _status = revoked
-          ? 'Signed out. The NexusIDE API key was revoked.'
-          : 'Signed out locally. If key revocation failed, revoke the NexusIDE key in your gateway dashboard.';
+      _accessToken = null; _refreshToken = null; _accessExpiresAt = null;
+      _accountEmail = null; _displayName = null; _signedIn = false;
+      _authBusy = false; _messages.clear();
+      _status = revoked ? 'Disconnected. This NexusIDE session was revoked.' :
+          'Disconnected locally. The gateway session could not be revoked; it will expire automatically.';
       _statusError = !revoked;
     });
   }
 
   Future<void> _testConnection() async {
-    if (!_signedIn || _key.text.trim().isEmpty) {
-      _setStatus('Sign in to your Nexus account first.', true);
+    if (!_signedIn) {
+      _setStatus('Connect your gateway account first.', true);
       return;
     }
     setState(() {
@@ -368,7 +394,8 @@ class _AiAgentPanelState extends State<AiAgentPanel> {
       _statusError = false;
     });
     try {
-      final models = await _client.testConnection(_baseUrl, _key.text.trim());
+      final token = await _validAccessToken();
+      final models = await _client.testConnection(_baseUrl, token);
       if (!mounted) return;
       setState(() {
         _testing = false;
@@ -388,8 +415,8 @@ class _AiAgentPanelState extends State<AiAgentPanel> {
   Future<void> _send() async {
     final prompt = _prompt.text.trim();
     if (prompt.isEmpty || _loading) return;
-    if (!_signedIn || _key.text.trim().isEmpty) {
-      _setStatus('Sign in to your Nexus account first.', true);
+    if (!_signedIn) {
+      _setStatus('Connect your gateway account first.', true);
       return;
     }
 
@@ -415,7 +442,8 @@ class _AiAgentPanelState extends State<AiAgentPanel> {
         'content': 'CURRENT TASK:\n' + prompt + '\n\nWORKSPACE CONTEXT:\n' + contextText,
       });
 
-      final raw = await _client.complete(_baseUrl, _key.text.trim(), _modelId, requestMessages);
+      final token = await _validAccessToken();
+      final raw = await _client.complete(_baseUrl, token, _modelId, requestMessages);
       final parsed = _parser.parse(raw);
       final allowedChanges = parsed.changes
           .where((change) => !_isSensitiveFile(change['path'] ?? ''))
@@ -531,115 +559,46 @@ class _AiAgentPanelState extends State<AiAgentPanel> {
 
   Widget _buildLoginView() {
     return SingleChildScrollView(
-      padding: const EdgeInsets.fromLTRB(16, 28, 16, 24),
+      padding: const EdgeInsets.fromLTRB(18, 30, 18, 24),
       child: Center(
         child: ConstrainedBox(
           constraints: const BoxConstraints(maxWidth: 420),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.stretch,
-            children: [
-              Container(
-                width: 48,
-                height: 48,
-                decoration: BoxDecoration(
-                  color: _agentAccent.withOpacity(0.12),
-                  borderRadius: BorderRadius.circular(14),
-                  border: Border.all(color: _agentAccent.withOpacity(0.3)),
-                ),
-                child: const Icon(Icons.auto_awesome_rounded, color: _agentAccent, size: 25),
-              ),
-              const SizedBox(height: 20),
-              Text(
-                _registerMode ? 'Create your Nexus account' : 'Sign in to Nexus',
-                style: const TextStyle(color: _agentText, fontSize: 22, fontWeight: FontWeight.w700, letterSpacing: -0.5),
-              ),
-              const SizedBox(height: 8),
-              const Text(
-                'Use your Mallss Nexus Route account. NexusIDE will connect Nexus-Free automatically; no API key or model setup is required.',
-                style: TextStyle(color: _agentMuted, fontSize: 12, height: 1.55),
-              ),
-              const SizedBox(height: 22),
-              TextField(
-                controller: _email,
-                keyboardType: TextInputType.emailAddress,
-                autocorrect: false,
-                enableSuggestions: false,
-                enabled: !_authBusy,
-                style: const TextStyle(color: _agentText, fontSize: 13),
-                decoration: _authDecoration('Email address', Icons.mail_outline_rounded),
-              ),
-              const SizedBox(height: 12),
-              TextField(
-                controller: _password,
-                obscureText: true,
-                autocorrect: false,
-                enableSuggestions: false,
-                enabled: !_authBusy,
-                onSubmitted: (_) => _authenticate(),
-                style: const TextStyle(color: _agentText, fontSize: 13),
-                decoration: _authDecoration('Password', Icons.lock_outline_rounded),
-              ),
-              const SizedBox(height: 7),
-              Text(
-                _registerMode ? 'Password must contain 10–128 characters.' : 'Sign in with the same account you use on the gateway website.',
-                style: const TextStyle(color: _agentMuted, fontSize: 10, height: 1.4),
-              ),
-              const SizedBox(height: 16),
-              SizedBox(
-                height: 42,
-                child: FilledButton(
-                  onPressed: _authBusy ? null : _authenticate,
-                  style: FilledButton.styleFrom(backgroundColor: _agentAccent, foregroundColor: _agentBg),
-                  child: _authBusy
-                      ? const SizedBox(width: 17, height: 17, child: CircularProgressIndicator(strokeWidth: 2, color: _agentBg))
-                      : Text(_registerMode ? 'Create account' : 'Sign in'),
-                ),
-              ),
-              const SizedBox(height: 6),
-              TextButton(
-                onPressed: _authBusy ? null : () => setState(() {
-                  _registerMode = !_registerMode;
-                  _status = null;
-                }),
-                child: Text(
-                  _registerMode ? 'Already have an account? Sign in' : 'New to Nexus? Create account',
-                  style: const TextStyle(color: _agentMuted, fontSize: 11),
-                ),
-              ),
-              const SizedBox(height: 16),
-              const Divider(color: _agentBorder),
-              const SizedBox(height: 12),
-              const Row(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Icon(Icons.verified_user_outlined, color: _agentAccent, size: 16),
-                  SizedBox(width: 8),
-                  Expanded(
-                    child: Text(
-                      'Your API key is generated automatically and stored securely on this device. You can sign out to revoke the key.',
-                      style: TextStyle(color: _agentMuted, fontSize: 10, height: 1.5),
-                    ),
-                  ),
-                ],
-              ),
-            ],
-          ),
+          child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
+            Container(
+              width: 52, height: 52,
+              decoration: BoxDecoration(color: _agentAccent.withOpacity(0.12), borderRadius: BorderRadius.circular(15), border: Border.all(color: _agentAccent.withOpacity(0.3))),
+              child: const Icon(Icons.link_rounded, color: _agentAccent, size: 27),
+            ),
+            const SizedBox(height: 20),
+            const Text('Connect AI Agent', style: TextStyle(color: _agentText, fontSize: 22, fontWeight: FontWeight.w700, letterSpacing: -0.5)),
+            const SizedBox(height: 8),
+            const Text(
+              'Connect your Mallss Nexus Route account. Your system browser will open so you can sign in and approve access. NexusIDE saves the connection securely for future sessions.',
+              style: TextStyle(color: _agentMuted, fontSize: 12, height: 1.6),
+            ),
+            const SizedBox(height: 24),
+            SizedBox(height: 46, child: FilledButton(
+              onPressed: _authBusy ? null : _authenticate,
+              style: FilledButton.styleFrom(backgroundColor: _agentAccent, foregroundColor: _agentBg, shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10))),
+              child: _authBusy
+                ? const SizedBox(width: 18, height: 18, child: CircularProgressIndicator(strokeWidth: 2, color: _agentBg))
+                : const Row(mainAxisAlignment: MainAxisAlignment.center, children: [
+                    Icon(Icons.link_rounded, size: 18), SizedBox(width: 9),
+                    Text('Connect Mallss Nexus Route', style: TextStyle(fontSize: 13, fontWeight: FontWeight.w700)),
+                  ]),
+            )),
+            const SizedBox(height: 13),
+            const Text('No gateway URL or API key to enter. You can disconnect the account at any time.', textAlign: TextAlign.center, style: TextStyle(color: _agentMuted, fontSize: 10, height: 1.5)),
+            const SizedBox(height: 22),
+            const Divider(color: _agentBorder),
+            const SizedBox(height: 14),
+            const Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
+              Icon(Icons.verified_user_outlined, color: _agentAccent, size: 16), SizedBox(width: 8),
+              Expanded(child: Text('Gateway access tokens are stored in secure device storage and refreshed automatically. NexusIDE never asks for your gateway password inside the IDE.', style: TextStyle(color: _agentMuted, fontSize: 10, height: 1.5))),
+            ]),
+          ]),
         ),
       ),
-    );
-  }
-
-  InputDecoration _authDecoration(String label, IconData icon) {
-    return InputDecoration(
-      labelText: label,
-      prefixIcon: Icon(icon, size: 18, color: _agentMuted),
-      filled: true,
-      fillColor: _agentBg,
-      isDense: true,
-      labelStyle: const TextStyle(color: _agentMuted, fontSize: 12),
-      border: OutlineInputBorder(borderRadius: BorderRadius.circular(9), borderSide: const BorderSide(color: _agentBorder)),
-      enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(9), borderSide: const BorderSide(color: _agentBorder)),
-      focusedBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(9), borderSide: const BorderSide(color: _agentAccent)),
     );
   }
 

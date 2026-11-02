@@ -780,12 +780,15 @@ class _AiAgentPanelState extends State<AiAgentPanel> {
                         hint: Row(mainAxisSize: MainAxisSize.min, children: [
                           Icon(_loadingModels ? Icons.sync_rounded : Icons.smart_toy_outlined, size: 14, color: _agentAccent),
                           const SizedBox(width: 5),
-                          Flexible(child: Text(
-                            _loadingModels ? 'Loading models…' : _selectedModel,
-                            maxLines: 1,
-                            overflow: TextOverflow.ellipsis,
-                            style: const TextStyle(color: _agentText, fontSize: 10),
-                          )),
+                          SizedBox(
+                            width: 104,
+                            child: Text(
+                              _loadingModels ? 'Loading models…' : _selectedModel,
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                              style: const TextStyle(color: _agentText, fontSize: 10),
+                            ),
+                          ),
                         ]),
                         isExpanded: false,
                         menuMaxHeight: 320,

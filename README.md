@@ -14,7 +14,9 @@ NexusIDE is a cross-platform Flutter coding workspace. The Windows layout follow
 
 ## Stage 2 — AI Agent basics
 
-- Sign in or create an account using the same email and password as Mallss Nexus Route.
+- Google OAuth uses a server-side web client. The client secret stays in the gateway environment; NexusIDE uses a one-time code + PKCE handoff.
+
+- Sign in with Google through the system browser using the Mallss Nexus Route OAuth connector; no email/password form is shown in NexusIDE.
 - Gateway URL and model selection are fixed internally: https://ai-router.mallss-nexus.sbs/v1 and Nexus-Free.
 - NexusIDE creates an account-owned API key automatically after login and stores it with secure device storage.
 - The Agent sends a limited workspace tree and up to eight open files as context when you submit a prompt.
@@ -42,7 +44,20 @@ The AI Agent currently supports proposed file creation and updates, not file del
 - file_selector for native file and directory pickers
 - http for gateway requests
 - flutter_secure_storage for the API key
+- flutter_web_auth_2 for browser-based OAuth on desktop and mobile
+- crypto for the PKCE code challenge
 - path for cross-platform path handling
+
+## Google sign-in setup
+
+Configure these environment variables on the Mallss Nexus Route gateway and redeploy it:
+
+- `GOOGLE_OAUTH_CLIENT_ID`
+- `GOOGLE_OAUTH_CLIENT_SECRET`
+- `GOOGLE_OAUTH_REDIRECT_URI=https://ai-router.mallss-nexus.sbs/auth/google/callback`
+- Optional: `NEXUSIDE_OAUTH_REDIRECT_URI=nexuside://oauth/callback`
+
+Create a **Web application** OAuth client in Google Cloud Console and register the exact callback URL as an authorized redirect URI. The Google client secret must never be added to this Flutter repository. The gateway README has the same deployment notes.
 
 ## Requirements
 

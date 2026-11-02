@@ -233,6 +233,7 @@ class _IdeHomeState extends State<IdeHome> {
       throw StateError('Open a workspace before applying AI changes.');
     }
     final root = p.normalize(p.absolute(workspace));
+    final realRoot = p.normalize(await Directory(root).resolveSymbolicLinks());
     final targets = <MapEntry<String, String>>[];
     for (final change in changes.entries) {
       final relative = change.key.trim().replaceAll(String.fromCharCode(92), '/');
@@ -249,6 +250,19 @@ class _IdeHomeState extends State<IdeHome> {
       if (!p.isWithin(root, target) || p.equals(root, target)) {
         throw StateError('Rejected path outside workspace: ' + change.key);
       }
+
+      // Resolve existing parent directories to prevent a symlink inside the
+      // workspace from redirecting an AI write outside the workspace.
+      var parent = root;
+      for (final segment in segments.take(segments.length - 1)) {
+        parent = p.join(parent, segment);
+        if (!await Directory(parent).exists()) break;
+        final realParent = p.normalize(await Directory(parent).resolveSymbolicLinks());
+        if (!p.equals(realRoot, realParent) && !p.isWithin(realRoot, realParent)) {
+          throw StateError('Rejected symlink path outside workspace: ' + change.key);
+        }
+      }
+
       if (await Directory(target).exists()) {
         throw StateError('Target is a directory: ' + change.key);
       }

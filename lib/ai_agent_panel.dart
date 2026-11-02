@@ -658,7 +658,7 @@ class _AiAgentPanelState extends State<AiAgentPanel> {
               Flexible(
                 child: Text(_displayName ?? _accountEmail ?? 'Signed in', maxLines: 1, overflow: TextOverflow.ellipsis, style: const TextStyle(color: _agentMuted, fontSize: 10)),
               ),
-              IconButton(tooltip: 'Sign out', onPressed: _authBusy ? null : _logout, visualDensity: VisualDensity.compact, icon: const Icon(Icons.logout_rounded, size: 18, color: _agentMuted)),
+              IconButton(tooltip: 'Disconnect', onPressed: _authBusy ? null : _logout, visualDensity: VisualDensity.compact, icon: const Icon(Icons.logout_rounded, size: 18, color: _agentMuted)),
             ],
             if (widget.onClose != null) IconButton(tooltip: 'Close AI Agent', onPressed: widget.onClose, visualDensity: VisualDensity.compact, icon: const Icon(Icons.close_rounded, size: 18, color: _agentMuted)),
           ]),

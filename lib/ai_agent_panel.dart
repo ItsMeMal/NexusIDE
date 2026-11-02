@@ -46,6 +46,7 @@ class _AiAgentPanelState extends State<AiAgentPanel> {
   static const _expiresAtName = 'nexuside.oauth.expiresAt';
   static const _emailName = 'nexuside.gateway.accountEmail';
   static const _displayNameName = 'nexuside.gateway.displayName';
+  static const _selectedModelName = 'nexuside.agent.selectedModel';
   static const _legacyKeyName = 'nexuside.gateway.apiKey';
   static const _legacySessionName = 'nexuside.gateway.sessionCookie';
   static const _legacyApiKeyIdName = 'nexuside.gateway.apiKeyId';
@@ -62,6 +63,9 @@ class _AiAgentPanelState extends State<AiAgentPanel> {
   bool _testing = false;
   bool _authBusy = false;
   bool _signedIn = false;
+  bool _loadingModels = false;
+  List<String> _models = <String>[];
+  String _selectedModel = NexusGatewayClient.defaultModel;
   String? _accessToken;
   String? _refreshToken;
   int? _accessExpiresAt;
@@ -72,7 +76,7 @@ class _AiAgentPanelState extends State<AiAgentPanel> {
 
   String get _baseUrl => NexusGatewayClient.defaultBaseUrl;
   String get _gatewayOrigin => _baseUrl.substring(0, _baseUrl.length - 3);
-  String get _modelId => NexusGatewayClient.defaultModel;
+  String get _modelId => _selectedModel.isEmpty ? NexusGatewayClient.defaultModel : _selectedModel;
 
   @override
   void initState() {
@@ -169,6 +173,7 @@ class _AiAgentPanelState extends State<AiAgentPanel> {
         _status = null;
         _statusError = false;
       });
+      await _loadAvailableModels();
     } catch (error) {
       if (!mounted) return;
       setState(() {
@@ -370,13 +375,14 @@ class _AiAgentPanelState extends State<AiAgentPanel> {
         _displayName = displayName;
         _signedIn = true;
         _authBusy = false;
-        _status = 'Connected to Mallss Nexus Route. Nexus-Free is ready.';
+        _status = 'Connected to Mallss Nexus Route.';
         _statusError = false;
         _messages
           ..clear()
           ..add(_ChatMessage('assistant', 'Connected to your gateway account. Ask me to explain your code or propose a change; nothing is written until you review it.'));
       });
       _scrollToBottom();
+      await _loadAvailableModels();
     } catch (error) {
       if (!mounted) return;
       setState(() {
@@ -414,33 +420,71 @@ class _AiAgentPanelState extends State<AiAgentPanel> {
     });
   }
 
+  Future<void> _selectModel(String? model) async {
+    if (model == null || model.trim().isEmpty || model == _selectedModel) return;
+    setState(() {
+      _selectedModel = model;
+      _status = 'Model changed to ' + model + '.';
+      _statusError = false;
+    });
+    await _secureStorage.write(key: _selectedModelName, value: model);
+  }
+
+  Future<void> _loadAvailableModels({bool announce = false, bool checkButton = false}) async {
+    if (!_signedIn) return;
+    if (mounted) {
+      setState(() {
+        _loadingModels = true;
+        if (checkButton) {
+          _testing = true;
+          _status = 'Checking gateway models…';
+          _statusError = false;
+        }
+      });
+    }
+    try {
+      final token = await _validAccessToken();
+      final models = await _client.testConnection(_baseUrl, token);
+      final savedModel = await _secureStorage.read(key: _selectedModelName);
+      var selected = savedModel ?? _selectedModel;
+      if (!models.contains(selected)) {
+        selected = models.contains(NexusGatewayClient.defaultModel)
+            ? NexusGatewayClient.defaultModel
+            : (models.isNotEmpty ? models.first : NexusGatewayClient.defaultModel);
+      }
+      await _secureStorage.write(key: _selectedModelName, value: selected);
+      if (!mounted) return;
+      setState(() {
+        _models = models;
+        _selectedModel = selected;
+        _loadingModels = false;
+        _testing = false;
+        if (announce) {
+          _status = models.isEmpty
+              ? 'Gateway connected, but no models were returned.'
+              : 'Gateway ready · ' + models.length.toString() + ' models available.';
+          _statusError = models.isEmpty;
+        }
+      });
+    } catch (error) {
+      if (!mounted) return;
+      setState(() {
+        _loadingModels = false;
+        _testing = false;
+        if (announce) {
+          _status = _client.friendlyError(error);
+          _statusError = true;
+        }
+      });
+    }
+  }
+
   Future<void> _testConnection() async {
     if (!_signedIn) {
       _setStatus('Connect your gateway account first.', true);
       return;
     }
-    setState(() {
-      _testing = true;
-      _status = 'Checking gateway…';
-      _statusError = false;
-    });
-    try {
-      final token = await _validAccessToken();
-      final models = await _client.testConnection(_baseUrl, token);
-      if (!mounted) return;
-      setState(() {
-        _testing = false;
-        _status = 'Connected. Models found: ' + models.length.toString() + '.';
-        _statusError = false;
-      });
-    } catch (error) {
-      if (!mounted) return;
-      setState(() {
-        _testing = false;
-        _status = _client.friendlyError(error);
-        _statusError = true;
-      });
-    }
+    await _loadAvailableModels(announce: true, checkButton: true);
   }
 
   Future<void> _send() async {
@@ -681,7 +725,7 @@ class _AiAgentPanelState extends State<AiAgentPanel> {
                   child: Row(children: [
                     SizedBox(width: 14, height: 14, child: CircularProgressIndicator(strokeWidth: 2, color: _agentAccent)),
                     SizedBox(width: 8),
-                    Text('Nexus-Free is thinking…', style: TextStyle(color: _agentMuted, fontSize: 11)),
+                    Text(_modelId + ' is thinking…', style: TextStyle(color: _agentMuted, fontSize: 11)),
                   ]),
                 );
               }
@@ -693,9 +737,9 @@ class _AiAgentPanelState extends State<AiAgentPanel> {
                   constraints: const BoxConstraints(maxWidth: 600),
                   margin: const EdgeInsets.only(bottom: 10),
                   padding: const EdgeInsets.all(10),
-                  decoration: BoxDecoration(color: isUser ? const Color(0xFF193336) : _agentBg, borderRadius: BorderRadius.circular(10), border: Border.all(color: isUser ? const Color(0xFF285052) : _agentBorder)),
+                  decoration: BoxDecoration(color: isUser ? const Color(0xFF193336) : const Color(0xFF121A24), borderRadius: BorderRadius.only(topLeft: const Radius.circular(14), topRight: const Radius.circular(14), bottomLeft: Radius.circular(isUser ? 14 : 4), bottomRight: Radius.circular(isUser ? 4 : 14)), border: Border.all(color: isUser ? const Color(0xFF285052) : _agentBorder)),
                   child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-                    Text(isUser ? 'YOU' : 'NEXUS-FREE', style: TextStyle(color: isUser ? _agentAccent : _agentMuted, fontSize: 9, fontWeight: FontWeight.w700)),
+                    Text(isUser ? 'YOU' : _modelId.toUpperCase(), maxLines: 1, overflow: TextOverflow.ellipsis, style: TextStyle(color: isUser ? _agentAccent : _agentMuted, fontSize: 9, fontWeight: FontWeight.w700)),
                     const SizedBox(height: 5),
                     SelectableText(item.text, style: const TextStyle(color: _agentText, fontSize: 12, height: 1.5)),
                     if (item.changes.isNotEmpty) ...[
@@ -727,8 +771,47 @@ class _AiAgentPanelState extends State<AiAgentPanel> {
               ),
               const SizedBox(height: 6),
               Row(children: [
-                Expanded(child: Text(NexusGatewayClient.defaultModel, maxLines: 1, overflow: TextOverflow.ellipsis, style: const TextStyle(color: _agentMuted, fontSize: 10))),
-                TextButton.icon(onPressed: _loading || _testing ? null : _testConnection, icon: const Icon(Icons.cloud_done_outlined, size: 14), label: const Text('Check'), style: TextButton.styleFrom(foregroundColor: _agentMuted, textStyle: const TextStyle(fontSize: 10))),
+                Flexible(
+                  child: Tooltip(
+                    message: 'Choose the model used for new requests',
+                    child: DropdownButtonHideUnderline(
+                      child: DropdownButton<String>(
+                        value: _models.contains(_selectedModel) ? _selectedModel : null,
+                        hint: Row(mainAxisSize: MainAxisSize.min, children: [
+                          Icon(_loadingModels ? Icons.sync_rounded : Icons.smart_toy_outlined, size: 14, color: _agentAccent),
+                          const SizedBox(width: 5),
+                          Flexible(child: Text(
+                            _loadingModels ? 'Loading models…' : _selectedModel,
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: const TextStyle(color: _agentText, fontSize: 10),
+                          )),
+                        ]),
+                        isExpanded: false,
+                        menuMaxHeight: 320,
+                        dropdownColor: _agentPanel,
+                        icon: const Icon(Icons.expand_more_rounded, color: _agentMuted, size: 16),
+                        style: const TextStyle(color: _agentText, fontSize: 11),
+                        onChanged: _loading || _loadingModels ? null : _selectModel,
+                        items: _models.map((model) => DropdownMenuItem<String>(
+                          value: model,
+                          child: ConstrainedBox(
+                            constraints: const BoxConstraints(maxWidth: 210),
+                            child: Text(model, maxLines: 1, overflow: TextOverflow.ellipsis),
+                          ),
+                        )).toList(growable: false),
+                      ),
+                    ),
+                  ),
+                ),
+                IconButton(
+                  tooltip: 'Refresh model list',
+                  onPressed: _loading || _testing || _loadingModels ? null : _testConnection,
+                  visualDensity: VisualDensity.compact,
+                  icon: _testing
+                      ? const SizedBox(width: 14, height: 14, child: CircularProgressIndicator(strokeWidth: 1.8, color: _agentAccent))
+                      : const Icon(Icons.refresh_rounded, size: 16, color: _agentMuted),
+                ),
                 FilledButton(onPressed: _loading ? null : _send, style: FilledButton.styleFrom(minimumSize: const Size(38, 34), padding: const EdgeInsets.symmetric(horizontal: 10), backgroundColor: _agentAccent, foregroundColor: _agentBg), child: _loading ? const SizedBox(width: 14, height: 14, child: CircularProgressIndicator(strokeWidth: 2, color: _agentBg)) : const Icon(Icons.arrow_upward_rounded, size: 17)),
               ]),
             ]),

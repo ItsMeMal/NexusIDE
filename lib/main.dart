@@ -683,8 +683,12 @@ class _ExplorerEntryState extends State<ExplorerEntry> {
           dividerColor: Colors.transparent,
           splashColor: accent.withOpacity(0.08),
         ),
-        child: ExpansionTile(
+        child: Material(
+          color: Colors.transparent,
+          child: ExpansionTile(
           key: PageStorageKey<String>(widget.entity.path),
+          backgroundColor: Colors.transparent,
+          collapsedBackgroundColor: Colors.transparent,
           dense: true,
           visualDensity: VisualDensity.compact,
           tilePadding: EdgeInsets.only(left: inset, right: 10),
@@ -700,7 +704,9 @@ class _ExplorerEntryState extends State<ExplorerEntry> {
           ),
           onExpansionChanged: (expanded) {
             if (expanded && childrenFuture == null) {
-              setState(() => childrenFuture = listDirectory(widget.entity.path));
+              setState(() {
+                childrenFuture = listDirectory(widget.entity.path);
+              });
             }
           },
           children: childrenFuture == null
@@ -743,6 +749,7 @@ class _ExplorerEntryState extends State<ExplorerEntry> {
                     },
                   ),
                 ],
+          ),
         ),
       );
     }
@@ -794,10 +801,32 @@ Future<List<FileSystemEntity>> listDirectory(String path) async {
 IconData fileIcon(String name) {
   switch (p.extension(name).toLowerCase()) {
     case '.dart':
+    case '.java':
+    case '.kt':
+    case '.kts':
+    case '.swift':
+    case '.c':
+    case '.h':
+    case '.cpp':
+    case '.hpp':
+    case '.cs':
+    case '.go':
+    case '.rs':
+    case '.php':
+    case '.rb':
+    case '.lua':
+    case '.sh':
+    case '.bat':
+    case '.ps1':
+    case '.sql':
       return Icons.code_rounded;
+    case '.py':
+      return Icons.terminal_rounded;
     case '.yaml':
     case '.yml':
     case '.json':
+    case '.toml':
+    case '.xml':
       return Icons.data_object_rounded;
     case '.md':
     case '.txt':
@@ -823,10 +852,28 @@ IconData fileIcon(String name) {
 Color fileColor(String name) {
   switch (p.extension(name).toLowerCase()) {
     case '.dart':
+    case '.java':
+    case '.kt':
+    case '.kts':
+    case '.swift':
+    case '.c':
+    case '.h':
+    case '.cpp':
+    case '.hpp':
+    case '.cs':
+    case '.go':
+    case '.rs':
+    case '.php':
+    case '.rb':
+    case '.lua':
       return const Color(0xFF72B7F2);
+    case '.py':
+      return const Color(0xFFF1C56A);
     case '.yaml':
     case '.yml':
     case '.json':
+    case '.toml':
+    case '.xml':
       return const Color(0xFFF1C56A);
     case '.md':
       return const Color(0xFF9BA9BC);

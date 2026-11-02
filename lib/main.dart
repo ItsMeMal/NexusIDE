@@ -212,6 +212,12 @@ class _IdeHomeState extends State<IdeHome> {
     final workspace = workspacePath;
     if (workspace == null) return [];
     final root = p.normalize(p.absolute(workspace));
+    String realRoot;
+    try {
+      realRoot = p.normalize(Directory(root).resolveSymbolicLinksSync());
+    } catch (_) {
+      return [];
+    }
     final active = activeDocument;
     final ordered = <OpenDocument>[
       if (active != null) active,
@@ -219,9 +225,14 @@ class _IdeHomeState extends State<IdeHome> {
     ];
     final result = <AiAgentContextFile>[];
     for (final item in ordered) {
-      final path = p.normalize(p.absolute(item.path));
-      if (!p.isWithin(root, path)) continue;
-      result.add(AiAgentContextFile(p.relative(path, from: root), item.controller.text));
+      String realPath;
+      try {
+        realPath = p.normalize(File(item.path).resolveSymbolicLinksSync());
+      } catch (_) {
+        continue;
+      }
+      if (!p.isWithin(realRoot, realPath)) continue;
+      result.add(AiAgentContextFile(p.relative(realPath, from: realRoot), item.controller.text));
       if (result.length == 8) break;
     }
     return result;

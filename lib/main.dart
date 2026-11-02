@@ -3,6 +3,7 @@ import 'dart:math' as math;
 
 import 'package:code_text_field/code_text_field.dart';
 import 'package:file_selector/file_selector.dart' as fs;
+import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_highlight/themes/vs2015.dart';
@@ -781,6 +782,7 @@ class ExplorerEntry extends StatefulWidget {
 
 class _ExplorerEntryState extends State<ExplorerEntry> {
   Future<List<FileSystemEntity>>? childrenFuture;
+  bool _childrenLoadScheduled = false;
 
   @override
   Widget build(BuildContext context) {
@@ -814,11 +816,20 @@ class _ExplorerEntryState extends State<ExplorerEntry> {
             style: const TextStyle(color: foreground, fontSize: 12.5),
           ),
           onExpansionChanged: (expanded) {
-            if (expanded && childrenFuture == null) {
+            if (!expanded || childrenFuture != null || _childrenLoadScheduled) {
+              return;
+            }
+
+            // ExpansionTile can report its restored expanded state while mounting.
+            // Defer the state update until the current build/layout pass is complete.
+            _childrenLoadScheduled = true;
+            WidgetsBinding.instance.addPostFrameCallback((_) {
+              _childrenLoadScheduled = false;
+              if (!mounted || childrenFuture != null) return;
               setState(() {
                 childrenFuture = listDirectory(widget.entity.path);
               });
-            }
+            });
           },
           children: childrenFuture == null
               ? const <Widget>[]
@@ -1002,7 +1013,7 @@ Color fileColor(String name) {
   }
 }
 
-class EditorTabs extends StatelessWidget {
+class EditorTabs extends StatefulWidget {
   const EditorTabs({
     required this.documents,
     required this.activeIndex,
@@ -1017,14 +1028,82 @@ class EditorTabs extends StatelessWidget {
   final Future<void> Function(int) onClose;
 
   @override
+  State<EditorTabs> createState() => _EditorTabsState();
+}
+
+class _EditorTabsState extends State<EditorTabs> {
+  final ScrollController _tabScrollController = ScrollController();
+
+  @override
+  void dispose() {
+    _tabScrollController.dispose();
+    super.dispose();
+  }
+
+  @override
+  void didUpdateWidget(covariant EditorTabs oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.activeIndex != widget.activeIndex ||
+        oldWidget.documents.length != widget.documents.length) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (!mounted ||
+            !_tabScrollController.hasClients ||
+            widget.activeIndex < 0 ||
+            widget.activeIndex >= widget.documents.length) {
+          return;
+        }
+
+        final position = _tabScrollController.position;
+        const tabWidth = 172.0;
+        final tabStart = widget.activeIndex * tabWidth;
+        final tabEnd = tabStart + tabWidth;
+        var target = _tabScrollController.offset;
+
+        if (tabStart < target) {
+          target = tabStart;
+        } else if (tabEnd > target + position.viewportDimension) {
+          target = tabEnd - position.viewportDimension;
+        }
+        target = target
+            .clamp(position.minScrollExtent, position.maxScrollExtent)
+            .toDouble();
+
+        if ((target - position.pixels).abs() > 0.5) {
+          _tabScrollController.animateTo(
+            target,
+            duration: const Duration(milliseconds: 160),
+            curve: Curves.easeOutCubic,
+          );
+        }
+      });
+    }
+  }
+
+  void _handlePointerSignal(PointerSignalEvent event) {
+    if (event is! PointerScrollEvent || !_tabScrollController.hasClients) return;
+
+    final delta = event.scrollDelta.dx.abs() > event.scrollDelta.dy.abs()
+        ? event.scrollDelta.dx
+        : event.scrollDelta.dy;
+    final position = _tabScrollController.position;
+    final target = (_tabScrollController.offset + delta)
+        .clamp(position.minScrollExtent, position.maxScrollExtent)
+        .toDouble();
+
+    if ((target - position.pixels).abs() > 0.1) {
+      _tabScrollController.jumpTo(target);
+    }
+  }
+
+  @override
   Widget build(BuildContext context) {
     return Container(
-      height: 40,
+      height: 44,
       decoration: const BoxDecoration(
         color: panel,
         border: Border(bottom: BorderSide(color: border)),
       ),
-      child: documents.isEmpty
+      child: widget.documents.isEmpty
           ? const Row(
               children: [
                 SizedBox(width: 16),
@@ -1033,63 +1112,82 @@ class EditorTabs extends StatelessWidget {
                 Text('Editor', style: TextStyle(color: muted, fontSize: 12)),
               ],
             )
-          : SingleChildScrollView(
-              scrollDirection: Axis.horizontal,
-              child: Row(
-                children: List<Widget>.generate(documents.length, (index) {
-                  final document = documents[index];
-                  final selected = index == activeIndex;
-                  return InkWell(
-                    onTap: () => onSelect(index),
-                    child: Container(
-                      width: 172,
-                      height: 40,
-                      padding: const EdgeInsets.only(left: 12, right: 6),
-                      decoration: BoxDecoration(
-                        color: selected ? bg : panel,
-                        border: Border(
-                          right: const BorderSide(color: border),
-                          top: BorderSide(
-                            color: selected ? accent : Colors.transparent,
-                            width: 2,
+          : Listener(
+              onPointerSignal: _handlePointerSignal,
+              child: Scrollbar(
+                controller: _tabScrollController,
+                thumbVisibility: true,
+                thickness: 4,
+                radius: const Radius.circular(4),
+                scrollbarOrientation: ScrollbarOrientation.bottom,
+                child: SingleChildScrollView(
+                  controller: _tabScrollController,
+                  scrollDirection: Axis.horizontal,
+                  physics: const ClampingScrollPhysics(),
+                  child: Row(
+                    children: List<Widget>.generate(widget.documents.length, (index) {
+                      final document = widget.documents[index];
+                      final selected = index == widget.activeIndex;
+                      return InkWell(
+                        onTap: () => widget.onSelect(index),
+                        child: Container(
+                          width: 172,
+                          height: 40,
+                          padding: const EdgeInsets.only(left: 12, right: 6),
+                          decoration: BoxDecoration(
+                            color: selected ? bg : panel,
+                            border: Border(
+                              right: const BorderSide(color: border),
+                              top: BorderSide(
+                                color: selected ? accent : Colors.transparent,
+                                width: 2,
+                              ),
+                            ),
+                          ),
+                          child: Row(
+                            children: [
+                              Icon(fileIcon(document.name),
+                                  size: 15, color: selected ? accent : muted),
+                              const SizedBox(width: 7),
+                              Expanded(
+                                child: Text(
+                                  document.name,
+                                  maxLines: 1,
+                                  overflow: TextOverflow.ellipsis,
+                                  style: TextStyle(
+                                    color: selected ? foreground : muted,
+                                    fontSize: 12,
+                                  ),
+                                ),
+                              ),
+                              if (document.dirty)
+                                Container(
+                                  width: 6,
+                                  height: 6,
+                                  margin: const EdgeInsets.only(right: 5),
+                                  decoration: const BoxDecoration(
+                                    color: accent,
+                                    shape: BoxShape.circle,
+                                  ),
+                                ),
+                              SizedBox(
+                                width: 24,
+                                height: 28,
+                                child: IconButton(
+                                  onPressed: () => widget.onClose(index),
+                                  padding: EdgeInsets.zero,
+                                  visualDensity: VisualDensity.compact,
+                                  tooltip: 'Close ' + document.name,
+                                  icon: const Icon(Icons.close_rounded, size: 14),
+                                ),
+                              ),
+                            ],
                           ),
                         ),
-                      ),
-                      child: Row(
-                        children: [
-                          Icon(fileIcon(document.name), size: 15, color: selected ? accent : muted),
-                          const SizedBox(width: 7),
-                          Expanded(
-                            child: Text(
-                              document.name,
-                              maxLines: 1,
-                              overflow: TextOverflow.ellipsis,
-                              style: TextStyle(color: selected ? foreground : muted, fontSize: 12),
-                            ),
-                          ),
-                          if (document.dirty)
-                            Container(
-                              width: 6,
-                              height: 6,
-                              margin: const EdgeInsets.only(right: 5),
-                              decoration: const BoxDecoration(color: accent, shape: BoxShape.circle),
-                            ),
-                          SizedBox(
-                            width: 24,
-                            height: 28,
-                            child: IconButton(
-                              onPressed: () => onClose(index),
-                              padding: EdgeInsets.zero,
-                              visualDensity: VisualDensity.compact,
-                              tooltip: 'Close ' + document.name,
-                              icon: const Icon(Icons.close_rounded, size: 14),
-                            ),
-                          ),
-                        ],
-                      ),
-                    ),
-                  );
-                }),
+                      );
+                    }),
+                  ),
+                ),
               ),
             ),
     );

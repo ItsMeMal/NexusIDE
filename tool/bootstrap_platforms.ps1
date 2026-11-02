@@ -29,8 +29,6 @@ try {
         Copy-Item -Path (Join-Path $bootstrapProject $platform) -Destination (Join-Path $projectRoot $platform) -Recurse
     }
 
-    & (Join-Path $PSScriptRoot 'configure_google_oauth.ps1')
-
     $metadataSource = Join-Path $bootstrapProject '.metadata'
     $metadataDestination = Join-Path $projectRoot '.metadata'
     if ((Test-Path $metadataSource) -and -not (Test-Path $metadataDestination)) {

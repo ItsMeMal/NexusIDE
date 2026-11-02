@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:path/path.dart' as p;
@@ -102,18 +103,18 @@ class _AiAgentPanelState extends State<AiAgentPanel> {
     });
   }
 
-  Future<void> _saveSettings() async {
+  Future<bool> _saveSettings() async {
     final uri = Uri.tryParse(_baseUrl);
     if (uri == null || uri.host.isEmpty ||
         !uri.path.endsWith('/v1') ||
         (uri.scheme != 'https' &&
           !(uri.scheme == 'http' && (uri.host == 'localhost' || uri.host == '127.0.0.1')))) {
       _setStatus('Use a valid HTTPS API base URL ending in /v1.', true);
-      return;
+      return false;
     }
     if (_modelId.isEmpty) {
       _setStatus('Enter a model ID, such as Nexus-Free.', true);
-      return;
+      return false;
     }
     try {
       final preferences = await SharedPreferences.getInstance();
@@ -125,8 +126,10 @@ class _AiAgentPanelState extends State<AiAgentPanel> {
         await _secureStorage.write(key: _keyName, value: _key.text.trim());
       }
       _setStatus('Gateway settings saved on this device.');
+      return true;
     } catch (error) {
       _setStatus('Could not save settings: ' + _client.friendlyError(error), true);
+      return false;
     }
   }
 
@@ -171,8 +174,8 @@ class _AiAgentPanelState extends State<AiAgentPanel> {
           TextButton(onPressed: () => Navigator.pop(dialogContext), child: const Text('Cancel')),
           FilledButton(
             onPressed: () async {
-              await _saveSettings();
-              if (dialogContext.mounted) Navigator.pop(dialogContext);
+              final saved = await _saveSettings();
+              if (saved && dialogContext.mounted) Navigator.pop(dialogContext);
             },
             child: const Text('Save'),
           ),
@@ -319,8 +322,13 @@ class _AiAgentPanelState extends State<AiAgentPanel> {
   bool _isSensitiveFile(String path) {
     final name = p.basename(path).toLowerCase();
     const sensitiveNames = <String>{
-      'credentials.json', 'service-account.json', 'secrets.json',
-      'id_rsa', 'id_ed25519', 'id_ecdsa',
+      'credentials.json',
+      'service-account.json',
+      'secrets.json',
+      'id_rsa',
+      'id_ed25519',
+      'id_ecdsa',
+      '.npmrc',
     };
     if (sensitiveNames.contains(name)) return true;
     if (name == '.env') return true;
@@ -328,10 +336,15 @@ class _AiAgentPanelState extends State<AiAgentPanel> {
         name != '.env.example' &&
         name != '.env.sample' &&
         name != '.env.template') return true;
+    if (name.contains('service-account') || name.contains('service_account') ||
+        name.contains('credential') || name.contains('secret')) return true;
     return name.endsWith('.pem') ||
         name.endsWith('.p12') ||
         name.endsWith('.pfx') ||
-        name.endsWith('.key');
+        name.endsWith('.key') ||
+        name.endsWith('.p8') ||
+        name.endsWith('.jks') ||
+        name.endsWith('.keystore');
   }
 
   Future<void> _review(_ChatMessage message) async {

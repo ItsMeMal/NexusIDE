@@ -1,0 +1,26 @@
+# Dart / Flutter
+.dart_tool/
+.packages
+.pub/
+.pub-cache/
+build/
+.flutter-plugins
+.flutter-plugins-dependencies
+
+# IDEs
+.idea/
+.vscode/
+*.iml
+
+# Platform build output
+android/.gradle/
+android/local.properties
+windows/flutter/ephemeral/
+windows/runner/Debug/
+windows/runner/Release/
+windows/runner/Profile/
+
+# Local environment
+.env
+.env.*
+!.env.example

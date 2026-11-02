@@ -256,18 +256,34 @@ class _IdeHomeState extends State<IdeHome> {
       var parent = root;
       for (final segment in segments.take(segments.length - 1)) {
         parent = p.join(parent, segment);
-        if (!await Directory(parent).exists()) break;
-        final realParent = p.normalize(await Directory(parent).resolveSymbolicLinks());
-        if (!p.equals(realRoot, realParent) && !p.isWithin(realRoot, realParent)) {
-          throw StateError('Rejected symlink path outside workspace: ' + change.key);
+        final parentType = await FileSystemEntity.type(parent, followLinks: false);
+        if (parentType == FileSystemEntityType.link) {
+          String resolvedParent;
+          try {
+            resolvedParent = await Directory(parent).resolveSymbolicLinks();
+          } catch (_) {
+            throw StateError('Rejected unresolved symbolic link: ' + change.key);
+          }
+          final realParent = p.normalize(resolvedParent);
+          if (!p.equals(realRoot, realParent) && !p.isWithin(realRoot, realParent)) {
+            throw StateError('Rejected symlink path outside workspace: ' + change.key);
+          }
+        } else if (parentType == FileSystemEntityType.directory) {
+          final realParent = p.normalize(await Directory(parent).resolveSymbolicLinks());
+          if (!p.equals(realRoot, realParent) && !p.isWithin(realRoot, realParent)) {
+            throw StateError('Rejected path outside workspace: ' + change.key);
+          }
+        } else {
+          break;
         }
       }
 
-      if (await Directory(target).exists()) {
-        throw StateError('Target is a directory: ' + change.key);
-      }
-      if (await Link(target).exists()) {
+      final targetType = await FileSystemEntity.type(target, followLinks: false);
+      if (targetType == FileSystemEntityType.link) {
         throw StateError('Rejected symbolic link target: ' + change.key);
+      }
+      if (targetType == FileSystemEntityType.directory) {
+        throw StateError('Target is a directory: ' + change.key);
       }
       targets.add(MapEntry(target, change.value));
     }

@@ -204,14 +204,6 @@ class _AiAgentPanelState extends State<AiAgentPanel> {
     return 'Request failed (HTTP ' + response.statusCode.toString() + ').';
   }
 
-  String? _cookieFromResponse(http.Response response) {
-    final header = response.headers['set-cookie'];
-    if (header == null || header.trim().isEmpty) return null;
-    final pair = header.split(';').first.trim();
-    if (!pair.startsWith('mnr_session=')) return null;
-    return pair;
-  }
-
   String _randomUrlToken(int byteLength) {
     final random = math.Random.secure();
     return base64UrlEncode(List<int>.generate(byteLength, (_) => random.nextInt(256)))

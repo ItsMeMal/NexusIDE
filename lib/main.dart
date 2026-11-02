@@ -450,7 +450,7 @@ class ActivityRail extends StatelessWidget {
               borderRadius: BorderRadius.circular(4),
             ),
           ),
-          const Transform.translate(
+          Transform.translate(
             offset: Offset(0, -36),
             child: SizedBox(
               width: 50,

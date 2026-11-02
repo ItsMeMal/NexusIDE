@@ -105,6 +105,7 @@ class _AiAgentPanelState extends State<AiAgentPanel> {
   Future<void> _saveSettings() async {
     final uri = Uri.tryParse(_baseUrl);
     if (uri == null || uri.host.isEmpty ||
+        !uri.path.endsWith('/v1') ||
         (uri.scheme != 'https' &&
           !(uri.scheme == 'http' && (uri.host == 'localhost' || uri.host == '127.0.0.1')))) {
       _setStatus('Use a valid HTTPS API base URL ending in /v1.', true);
@@ -229,8 +230,8 @@ class _AiAgentPanelState extends State<AiAgentPanel> {
   Future<void> _send() async {
     final prompt = _prompt.text.trim();
     if (prompt.isEmpty || _loading) return;
-    if (_key.text.trim().isEmpty) {
-      _setStatus('Open settings and add your gateway API key first.', true);
+    if (_key.text.trim().isEmpty || _modelId.isEmpty) {
+      _setStatus('Open settings and add your gateway API key and model ID.', true);
       await _showSettings();
       return;
     }
@@ -303,12 +304,34 @@ class _AiAgentPanelState extends State<AiAgentPanel> {
     if (files.isEmpty) out.writeln('(No files open)');
     for (final file in files) {
       if (remaining <= 0) break;
+      if (_isSensitiveFile(file.path)) {
+        out.writeln('\n--- FILE: ' + file.path + ' --- [contents omitted because the filename appears sensitive]');
+        continue;
+      }
       final body = file.content.length > remaining ? file.content.substring(0, remaining) : file.content;
       out.writeln('\n--- FILE: ' + file.path + ' ---');
       out.writeln(body);
       remaining -= body.length;
     }
     return out.toString();
+  }
+
+  bool _isSensitiveFile(String path) {
+    final name = p.basename(path).toLowerCase();
+    const sensitiveNames = <String>{
+      'credentials.json', 'service-account.json', 'secrets.json',
+      'id_rsa', 'id_ed25519', 'id_ecdsa',
+    };
+    if (sensitiveNames.contains(name)) return true;
+    if (name == '.env') return true;
+    if (name.startsWith('.env.') &&
+        name != '.env.example' &&
+        name != '.env.sample' &&
+        name != '.env.template') return true;
+    return name.endsWith('.pem') ||
+        name.endsWith('.p12') ||
+        name.endsWith('.pfx') ||
+        name.endsWith('.key');
   }
 
   Future<void> _review(_ChatMessage message) async {

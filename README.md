@@ -91,4 +91,10 @@ This repository starts with Dart source. Generate the native Windows and Android
 
 The bootstrap script refuses to overwrite existing Windows or Android folders. Do not run it again after the native runners have been generated.
 
-For Android, connect an emulator or device, then use flutter devices and flutter run -d DEVICE_ID. The full Acode-inspired mobile workflow is planned for a later stage.
+For Android, configure the OAuth callback in the generated native runner once:
+
+   ~~~powershell
+   powershell -ExecutionPolicy Bypass -File .\tool\configure_google_oauth.ps1
+   ~~~
+
+   Then connect an emulator or device, use `flutter devices`, and run `flutter run -d DEVICE_ID`. The bootstrap script applies this callback configuration automatically when it creates the Android runner. The full Acode-inspired mobile workflow is planned for a later stage.

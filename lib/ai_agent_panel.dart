@@ -57,6 +57,16 @@ class _AiAgentPanelState extends State<AiAgentPanel> {
   String get _baseUrl => _client.normalizeUrl(_url.text);
   String get _modelId => _model.text.trim();
 
+  bool get _baseUrlIsValid {
+    final uri = Uri.tryParse(_baseUrl);
+    return uri != null &&
+        uri.host.isNotEmpty &&
+        uri.path.endsWith('/v1') &&
+        (uri.scheme == 'https' ||
+            (uri.scheme == 'http' &&
+                (uri.host == 'localhost' || uri.host == '127.0.0.1')));
+  }
+
   @override
   void initState() {
     super.initState();
@@ -103,11 +113,7 @@ class _AiAgentPanelState extends State<AiAgentPanel> {
   }
 
   Future<bool> _saveSettings() async {
-    final uri = Uri.tryParse(_baseUrl);
-    if (uri == null || uri.host.isEmpty ||
-        !uri.path.endsWith('/v1') ||
-        (uri.scheme != 'https' &&
-          !(uri.scheme == 'http' && (uri.host == 'localhost' || uri.host == '127.0.0.1')))) {
+    if (!_baseUrlIsValid) {
       _setStatus('Use a valid HTTPS API base URL ending in /v1.', true);
       return false;
     }
@@ -202,6 +208,10 @@ class _AiAgentPanelState extends State<AiAgentPanel> {
   }
 
   Future<void> _testConnection() async {
+    if (!_baseUrlIsValid) {
+      _setStatus('Use a valid HTTPS API base URL ending in /v1.', true);
+      return;
+    }
     if (_key.text.trim().isEmpty) {
       _setStatus('Add your gateway API key in settings first.', true);
       return;
@@ -234,6 +244,11 @@ class _AiAgentPanelState extends State<AiAgentPanel> {
     if (prompt.isEmpty || _loading) return;
     if (_key.text.trim().isEmpty || _modelId.isEmpty) {
       _setStatus('Open settings and add your gateway API key and model ID.', true);
+      await _showSettings();
+      return;
+    }
+    if (!_baseUrlIsValid) {
+      _setStatus('Use a valid HTTPS API base URL ending in /v1.', true);
       await _showSettings();
       return;
     }

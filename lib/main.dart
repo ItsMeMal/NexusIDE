@@ -266,6 +266,9 @@ class _IdeHomeState extends State<IdeHome> {
       if (await Directory(target).exists()) {
         throw StateError('Target is a directory: ' + change.key);
       }
+      if (await Link(target).exists()) {
+        throw StateError('Rejected symbolic link target: ' + change.key);
+      }
       targets.add(MapEntry(target, change.value));
     }
 

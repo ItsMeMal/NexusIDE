@@ -776,7 +776,7 @@ class _AiAgentPanelState extends State<AiAgentPanel> {
                 enabled: !_loading,
                 onSubmitted: (_) => _send(),
                 style: const TextStyle(color: _agentText, fontSize: 12),
-                decoration: InputDecoration(hintText: 'Ask Nexus-Free about your code…', hintStyle: const TextStyle(color: _agentMuted, fontSize: 11), filled: true, fillColor: _agentBg, isDense: true, contentPadding: const EdgeInsets.all(10), border: OutlineInputBorder(borderRadius: BorderRadius.circular(9), borderSide: const BorderSide(color: _agentBorder))),
+                decoration: InputDecoration(hintText: 'Ask ' + _modelId + ' to build or edit code…', hintStyle: const TextStyle(color: _agentMuted, fontSize: 11), filled: true, fillColor: _agentBg, isDense: true, contentPadding: const EdgeInsets.all(10), border: OutlineInputBorder(borderRadius: BorderRadius.circular(9), borderSide: const BorderSide(color: _agentBorder))),
               ),
               const SizedBox(height: 6),
               Row(children: [

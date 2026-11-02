@@ -1,6 +1,9 @@
 import 'dart:convert';
+import 'dart:math' as math;
 
+import 'package:crypto/crypto.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter_web_auth_2/flutter_web_auth_2.dart';
 import 'package:http/http.dart' as http;
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:path/path.dart' as p;
@@ -43,8 +46,6 @@ class _AiAgentPanelState extends State<AiAgentPanel> {
   static const _displayNameName = 'nexuside.gateway.displayName';
 
   final _key = TextEditingController();
-  final _email = TextEditingController();
-  final _password = TextEditingController();
   final _prompt = TextEditingController();
   final _scroll = ScrollController();
   final _secureStorage = FlutterSecureStorage();
@@ -56,7 +57,6 @@ class _AiAgentPanelState extends State<AiAgentPanel> {
   bool _loading = false;
   bool _testing = false;
   bool _authBusy = false;
-  bool _registerMode = false;
   bool _signedIn = false;
   String? _sessionCookie;
   String? _apiKeyId;
@@ -78,8 +78,6 @@ class _AiAgentPanelState extends State<AiAgentPanel> {
   @override
   void dispose() {
     _key.dispose();
-    _email.dispose();
-    _password.dispose();
     _prompt.dispose();
     _scroll.dispose();
     super.dispose();
@@ -173,56 +171,88 @@ class _AiAgentPanelState extends State<AiAgentPanel> {
     return pair;
   }
 
-  Future<void> _authenticate() async {
-    final email = _email.text.trim().toLowerCase();
-    final password = _password.text;
-    if (!RegExp(r'^[^\s@]+@[^\s@]+\.[^\s@]+$').hasMatch(email)) {
-      _setStatus('Enter a valid email address.', true);
-      return;
-    }
-    if (password.length < 10 || password.length > 128) {
-      _setStatus('Password must contain 10–128 characters.', true);
-      return;
-    }
+  String _randomUrlToken(int byteLength) {
+    final random = math.Random.secure();
+    return base64UrlEncode(List<int>.generate(byteLength, (_) => random.nextInt(256)))
+        .replaceAll('=', '');
+  }
 
+  Future<void> _authenticate() async {
     setState(() {
       _authBusy = true;
-      _status = _registerMode ? 'Creating your account…' : 'Signing in…';
+      _status = 'Waiting for Google sign-in…';
       _statusError = false;
     });
 
     String? newCookie;
     String? newKeyId;
     try {
-      final endpoint = _registerMode ? '/auth/register' : '/auth/login';
-      final response = await http.post(
-        Uri.parse(_baseUrl + endpoint),
+      final state = _randomUrlToken(32);
+      final verifier = _randomUrlToken(48);
+      final challenge = base64UrlEncode(sha256.convert(utf8.encode(verifier)).bytes)
+          .replaceAll('=', '');
+      final authorizeUri = Uri.parse(_gatewayOrigin + '/auth/google/start').replace(
+        queryParameters: {'state': state, 'code_challenge': challenge},
+      );
+
+      final callback = await FlutterWebAuth2.authenticate(
+        url: authorizeUri.toString(),
+        callbackUrlScheme: 'nexuside',
+      );
+      final callbackUri = Uri.parse(callback);
+      if (callbackUri.queryParameters['state'] != state) {
+        throw Exception('Google sign-in state validation failed. Please retry.');
+      }
+      final oauthError = callbackUri.queryParameters['error'];
+      if (oauthError != null && oauthError.isNotEmpty) {
+        final message = switch (oauthError) {
+          'google_oauth_not_configured' =>
+            'Google sign-in is not configured on the gateway yet.',
+          'google_oauth_invalid_config' =>
+            'The gateway Google OAuth redirect URI is invalid.',
+          'google_login_cancelled' => 'Google sign-in was cancelled.',
+          'oauth_account_disabled' => 'This Nexus account is disabled.',
+          'oauth_email_already_linked' =>
+            'This email is linked to a different Google account.',
+          _ => 'Google sign-in failed. Please retry.',
+        };
+        throw Exception(message);
+      }
+      final code = callbackUri.queryParameters['code'];
+      if (code == null || code.isEmpty) {
+        throw Exception('Google did not return a login code.');
+      }
+
+      final exchange = await http.post(
+        Uri.parse(_gatewayOrigin + '/auth/google/exchange'),
         headers: {'Content-Type': 'application/json', 'Accept': 'application/json'},
         body: jsonEncode({
-          'email': email,
-          'password': password,
-          'displayName': email.split('@').first,
+          'code': code,
+          'state': state,
+          'code_verifier': verifier,
         }),
       ).timeout(const Duration(seconds: 30));
-
-      final responseData = _decodeResponse(response.body);
-      if (response.statusCode < 200 || response.statusCode >= 300) {
-        throw Exception(_responseError(response));
+      final sessionData = _decodeResponse(exchange.body);
+      if (exchange.statusCode < 200 || exchange.statusCode >= 300) {
+        throw Exception(_responseError(exchange));
       }
-      newCookie = _cookieFromResponse(response);
+      newCookie = _cookieFromResponse(exchange);
       if (newCookie == null) {
-        throw Exception('The gateway did not return an account session cookie.');
+        throw Exception('The gateway did not create a valid account session.');
       }
 
-      final userData = responseData?['user'];
+      final userData = sessionData?['user'];
       final responseEmail = userData is Map && userData['email'] is String
           ? (userData['email'] as String).toLowerCase()
-          : email;
+          : '';
       final displayName = userData is Map && userData['display_name'] is String
           ? userData['display_name'] as String
-          : email.split('@').first;
+          : responseEmail;
+      if (responseEmail.isEmpty) {
+        throw Exception('The gateway returned no account identity.');
+      }
 
-      // If the previous account session is still valid, revoke its app key before replacing it.
+      // Revoke any key previously issued to this NexusIDE installation.
       final previousCookie = await _secureStorage.read(key: _sessionName);
       final previousKeyId = await _secureStorage.read(key: _apiKeyIdName);
       final previousEmail = await _secureStorage.read(key: _emailName);
@@ -237,6 +267,14 @@ class _AiAgentPanelState extends State<AiAgentPanel> {
           ).timeout(const Duration(seconds: 15));
         } catch (_) {}
       }
+      if (previousCookie != null && previousCookie != newCookie) {
+        try {
+          await http.post(
+            Uri.parse(_gatewayOrigin + '/auth/logout'),
+            headers: {'Cookie': previousCookie},
+          ).timeout(const Duration(seconds: 10));
+        } catch (_) {}
+      }
 
       final keyResponse = await http.post(
         Uri.parse(_gatewayOrigin + '/account/api-keys'),
@@ -247,7 +285,6 @@ class _AiAgentPanelState extends State<AiAgentPanel> {
         },
         body: jsonEncode({'name': 'NexusIDE'}),
       ).timeout(const Duration(seconds: 30));
-
       final keyData = _decodeResponse(keyResponse.body);
       if (keyResponse.statusCode < 200 || keyResponse.statusCode >= 300) {
         throw Exception(_responseError(keyResponse));
@@ -266,7 +303,7 @@ class _AiAgentPanelState extends State<AiAgentPanel> {
       await _secureStorage.write(key: _displayNameName, value: displayName);
 
       if (!mounted) return;
-      _password.clear();
+      _prompt.clear();
       setState(() {
         _key.text = rawKey;
         _sessionCookie = newCookie;
@@ -275,7 +312,7 @@ class _AiAgentPanelState extends State<AiAgentPanel> {
         _displayName = displayName;
         _signedIn = true;
         _authBusy = false;
-        _status = 'Signed in. Nexus-Free is ready.';
+        _status = 'Signed in with Google. Nexus-Free is ready.';
         _statusError = false;
         _messages
           ..clear()
@@ -531,7 +568,7 @@ class _AiAgentPanelState extends State<AiAgentPanel> {
 
   Widget _buildLoginView() {
     return SingleChildScrollView(
-      padding: const EdgeInsets.fromLTRB(16, 28, 16, 24),
+      padding: const EdgeInsets.fromLTRB(18, 30, 18, 24),
       child: Center(
         child: ConstrainedBox(
           constraints: const BoxConstraints(maxWidth: 420),
@@ -539,76 +576,64 @@ class _AiAgentPanelState extends State<AiAgentPanel> {
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
               Container(
-                width: 48,
-                height: 48,
+                width: 52,
+                height: 52,
                 decoration: BoxDecoration(
                   color: _agentAccent.withOpacity(0.12),
-                  borderRadius: BorderRadius.circular(14),
+                  borderRadius: BorderRadius.circular(15),
                   border: Border.all(color: _agentAccent.withOpacity(0.3)),
                 ),
-                child: const Icon(Icons.auto_awesome_rounded, color: _agentAccent, size: 25),
+                child: const Icon(Icons.auto_awesome_rounded, color: _agentAccent, size: 27),
               ),
               const SizedBox(height: 20),
-              Text(
-                _registerMode ? 'Create your Nexus account' : 'Sign in to Nexus',
-                style: const TextStyle(color: _agentText, fontSize: 22, fontWeight: FontWeight.w700, letterSpacing: -0.5),
+              const Text(
+                'Sign in to NexusIDE',
+                style: TextStyle(color: _agentText, fontSize: 22, fontWeight: FontWeight.w700, letterSpacing: -0.5),
               ),
               const SizedBox(height: 8),
               const Text(
-                'Use your Mallss Nexus Route account. NexusIDE will connect Nexus-Free automatically; no API key or model setup is required.',
-                style: TextStyle(color: _agentMuted, fontSize: 12, height: 1.55),
+                'Continue with your Google account. NexusIDE connects to Nexus-Free automatically—no email form, API key, or model setup.',
+                style: TextStyle(color: _agentMuted, fontSize: 12, height: 1.6),
+              ),
+              const SizedBox(height: 24),
+              SizedBox(
+                height: 48,
+                child: OutlinedButton(
+                  onPressed: _authBusy ? null : _authenticate,
+                  style: OutlinedButton.styleFrom(
+                    backgroundColor: const Color(0xFFF8FAFC),
+                    foregroundColor: const Color(0xFF202124),
+                    side: const BorderSide(color: Color(0xFFDADCE0)),
+                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                  ),
+                  child: _authBusy
+                      ? const SizedBox(
+                          width: 18,
+                          height: 18,
+                          child: CircularProgressIndicator(strokeWidth: 2, color: _agentBg),
+                        )
+                      : Row(
+                          mainAxisAlignment: MainAxisAlignment.center,
+                          children: [
+                            const Text(
+                              'G',
+                              style: TextStyle(color: Color(0xFF4285F4), fontSize: 23, fontWeight: FontWeight.w800),
+                            ),
+                            const SizedBox(width: 12),
+                            const Text('Continue with Google', style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600)),
+                          ],
+                        ),
+                ),
+              ),
+              const SizedBox(height: 12),
+              const Text(
+                'A secure browser window will open to complete Google sign-in.',
+                textAlign: TextAlign.center,
+                style: TextStyle(color: _agentMuted, fontSize: 10, height: 1.5),
               ),
               const SizedBox(height: 22),
-              TextField(
-                controller: _email,
-                keyboardType: TextInputType.emailAddress,
-                autocorrect: false,
-                enableSuggestions: false,
-                enabled: !_authBusy,
-                style: const TextStyle(color: _agentText, fontSize: 13),
-                decoration: _authDecoration('Email address', Icons.mail_outline_rounded),
-              ),
-              const SizedBox(height: 12),
-              TextField(
-                controller: _password,
-                obscureText: true,
-                autocorrect: false,
-                enableSuggestions: false,
-                enabled: !_authBusy,
-                onSubmitted: (_) => _authenticate(),
-                style: const TextStyle(color: _agentText, fontSize: 13),
-                decoration: _authDecoration('Password', Icons.lock_outline_rounded),
-              ),
-              const SizedBox(height: 7),
-              Text(
-                _registerMode ? 'Password must contain 10–128 characters.' : 'Sign in with the same account you use on the gateway website.',
-                style: const TextStyle(color: _agentMuted, fontSize: 10, height: 1.4),
-              ),
-              const SizedBox(height: 16),
-              SizedBox(
-                height: 42,
-                child: FilledButton(
-                  onPressed: _authBusy ? null : _authenticate,
-                  style: FilledButton.styleFrom(backgroundColor: _agentAccent, foregroundColor: _agentBg),
-                  child: _authBusy
-                      ? const SizedBox(width: 17, height: 17, child: CircularProgressIndicator(strokeWidth: 2, color: _agentBg))
-                      : Text(_registerMode ? 'Create account' : 'Sign in'),
-                ),
-              ),
-              const SizedBox(height: 6),
-              TextButton(
-                onPressed: _authBusy ? null : () => setState(() {
-                  _registerMode = !_registerMode;
-                  _status = null;
-                }),
-                child: Text(
-                  _registerMode ? 'Already have an account? Sign in' : 'New to Nexus? Create account',
-                  style: const TextStyle(color: _agentMuted, fontSize: 11),
-                ),
-              ),
-              const SizedBox(height: 16),
               const Divider(color: _agentBorder),
-              const SizedBox(height: 12),
+              const SizedBox(height: 14),
               const Row(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
@@ -616,7 +641,7 @@ class _AiAgentPanelState extends State<AiAgentPanel> {
                   SizedBox(width: 8),
                   Expanded(
                     child: Text(
-                      'Your API key is generated automatically and stored securely on this device. You can sign out to revoke the key.',
+                      'NexusIDE creates its own account key after sign-in and stores it in secure device storage. Signing out attempts to revoke that key.',
                       style: TextStyle(color: _agentMuted, fontSize: 10, height: 1.5),
                     ),
                   ),
@@ -626,20 +651,6 @@ class _AiAgentPanelState extends State<AiAgentPanel> {
           ),
         ),
       ),
-    );
-  }
-
-  InputDecoration _authDecoration(String label, IconData icon) {
-    return InputDecoration(
-      labelText: label,
-      prefixIcon: Icon(icon, size: 18, color: _agentMuted),
-      filled: true,
-      fillColor: _agentBg,
-      isDense: true,
-      labelStyle: const TextStyle(color: _agentMuted, fontSize: 12),
-      border: OutlineInputBorder(borderRadius: BorderRadius.circular(9), borderSide: const BorderSide(color: _agentBorder)),
-      enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(9), borderSide: const BorderSide(color: _agentBorder)),
-      focusedBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(9), borderSide: const BorderSide(color: _agentAccent)),
     );
   }
 

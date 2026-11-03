@@ -198,7 +198,7 @@ class AiAgentSkillsService {
   String? _readScalar(String frontmatter, String key) {
     for (final line in frontmatter.split('\n')) {
       final match = RegExp(
-        '^\\s*' + RegExp.escape(key) + '\\s*:\\s*(.*?)\\s*\$',
+        '^\\s*' + RegExp.escape(key) + '\\s*:\\s*(.*?)\\s*$',
       ).firstMatch(line);
       if (match == null) continue;
       var value = match.group(1)!.trim();

@@ -3,8 +3,8 @@ import 'dart:io';
 import 'package:flutter/services.dart' show rootBundle;
 import 'package:path/path.dart' as p;
 
-/// Portable Agent Skills loader. Skills are instruction-only: bundled scripts
-/// and other resources are never executed by NexusIDE.
+/// Portable Agent Skills loader. Bundled scripts and other skill resources are
+/// instruction-only: NexusIDE does not execute them.
 class AgentSkill {
   const AgentSkill({
     required this.id,
@@ -44,157 +44,167 @@ class AiAgentSkillsService {
   ];
 
   static const _stopWords = <String>{
-    'about', 'after', 'agent', 'also', 'and', 'app', 'application', 'asked',
-    'build', 'change', 'code', 'create', 'feature', 'for', 'from', 'help',
-    'how', 'into', 'make', 'need', 'nexuside', 'our', 'please', 'project',
-    'should', 'that', 'their', 'then', 'this', 'when', 'with', 'work',
-    'your', 'use', 'using', 'implement', 'update', 'want',
+    'about', 'after', 'also', 'and', 'application', 'asked', 'can', 'code',
+    'does', 'for', 'from', 'have', 'help', 'into', 'just', 'make', 'need',
+    'nexuside', 'please', 'project', 'should', 'that', 'their', 'them',
+    'then', 'this', 'with', 'when', 'where', 'will', 'work', 'your',
+    'using', 'want', 'feature', 'change', 'build', 'create', 'implement',
+    'update', 'support',
   };
 
   Future<List<AgentSkill>> loadSkills(String? workspacePath) async {
-    final skillsById = <String, AgentSkill>{};
+    final byId = <String, AgentSkill>{};
 
     for (final assetPath in _builtInPaths) {
       try {
         final raw = await rootBundle.loadString(assetPath);
-        final skill = _parseSkill(raw, source: 'Built-in', isBuiltIn: true,
-          fallbackName: p.basename(p.dirname(assetPath)));
-        if (skill != null) skillsById[skill.id] = skill;
+        final skill = _parse(
+          raw,
+          source: 'Built-in',
+          isBuiltIn: true,
+          fallbackName: p.basename(p.dirname(assetPath)),
+        );
+        if (skill != null) byId[skill.id] = skill;
       } catch (_) {
-        // Keep the rest of the skill catalog usable if one bundled skill is absent.
+        // A missing bundled skill must not prevent the remaining skills loading.
       }
     }
 
     if (workspacePath != null && workspacePath.trim().isNotEmpty) {
       final root = Directory(p.normalize(p.absolute(workspacePath)));
       if (await root.exists()) {
-        for (final relativeRoot in _skillRoots) {
-          final skillsRoot = Directory(p.join(root.path, relativeRoot));
-          if (!await skillsRoot.exists()) continue;
-          await _scanSkillsRoot(
-            skillsRoot,
-            root.path,
-            skillsById,
-            maxSkills: 80,
-          );
+        for (final relative in _skillRoots) {
+          final directory = Directory(p.join(root.path, relative));
+          if (await directory.exists()) {
+            await _scanRoot(directory, root.path, byId, maxSkills: 80);
+          }
         }
       }
     }
 
-    final result = skillsById.values.toList(growable: false);
-    result.sort((a, b) {
+    final skills = byId.values.toList(growable: false);
+    skills.sort((a, b) {
       if (a.isBuiltIn != b.isBuiltIn) return a.isBuiltIn ? -1 : 1;
       return a.name.toLowerCase().compareTo(b.name.toLowerCase());
     });
-    return result;
+    return skills;
   }
 
-  Future<void> _scanSkillsRoot(
-    Directory skillsRoot,
-    String workspaceRoot,
+  Future<void> _scanRoot(
+    Directory root,
+    String workspacePath,
     Map<String, AgentSkill> output, {
     required int maxSkills,
   }) async {
-    List<FileSystemEntity> firstLevel;
+    List<FileSystemEntity> children;
     try {
-      firstLevel = await skillsRoot.list(followLinks: false).toList();
+      children = await root.list(followLinks: false).toList();
     } catch (_) {
       return;
     }
-    for (final entry in firstLevel) {
-      if (output.length >= maxSkills || entry is Link) break;
-      if (entry is! Directory) continue;
-      final directSkill = File(p.join(entry.path, 'SKILL.md'));
-      if (await directSkill.exists()) {
-        await _loadWorkspaceSkill(directSkill, workspaceRoot, output);
+
+    for (final child in children) {
+      if (output.length >= maxSkills) return;
+      if (child is! Directory || child is Link) continue;
+
+      final skillFile = File(p.join(child.path, 'SKILL.md'));
+      if (await skillFile.exists()) {
+        await _loadProjectSkill(skillFile, workspacePath, output);
         continue;
       }
 
-      // Support category nesting such as .agents/skills/frontend/my-skill/SKILL.md.
+      // Also support category nesting: skills/frontend/my-skill/SKILL.md.
       List<FileSystemEntity> nested;
       try {
-        nested = await entry.list(followLinks: false).toList();
+        nested = await child.list(followLinks: false).toList();
       } catch (_) {
         continue;
       }
-      for (final nestedEntry in nested) {
-        if (output.length >= maxSkills) break;
-        if (nestedEntry is! Directory || nestedEntry is Link) continue;
-        final nestedSkill = File(p.join(nestedEntry.path, 'SKILL.md'));
-        if (await nestedSkill.exists()) {
-          await _loadWorkspaceSkill(nestedSkill, workspaceRoot, output);
+      for (final item in nested) {
+        if (output.length >= maxSkills) return;
+        if (item is! Directory || item is Link) continue;
+        final nestedFile = File(p.join(item.path, 'SKILL.md'));
+        if (await nestedFile.exists()) {
+          await _loadProjectSkill(nestedFile, workspacePath, output);
         }
       }
     }
   }
 
-  Future<void> _loadWorkspaceSkill(
+  Future<void> _loadProjectSkill(
     File file,
-    String workspaceRoot,
+    String workspacePath,
     Map<String, AgentSkill> output,
   ) async {
     try {
       if (await file.length() > 40000) return;
       final raw = await file.readAsString();
-      final relative = p.relative(file.parent.path, from: workspaceRoot)
-        .replaceAll(String.fromCharCode(92), '/');
-      final skill = _parseSkill(
+      final relative = p.relative(file.parent.path, from: workspacePath)
+          .replaceAll(String.fromCharCode(92), '/');
+      final skill = _parse(
         raw,
         source: relative,
         isBuiltIn: false,
         fallbackName: p.basename(file.parent.path),
       );
       if (skill != null) {
-        // A project skill can intentionally override a built-in skill with the
-        // same ID; it never changes the bundled skill on disk.
+        // A project skill can override a bundled skill with the same ID.
         output[skill.id] = skill;
       }
     } catch (_) {
-      // Ignore malformed or unreadable skills instead of failing the Agent.
+      // Skip malformed, unreadable, or concurrently removed files.
     }
   }
 
-  AgentSkill? _parseSkill(
+  AgentSkill? _parse(
     String raw, {
     required String source,
     required bool isBuiltIn,
     required String fallbackName,
   }) {
-    final normalized = raw.replaceFirst('\r\n', '\n');
+    final normalized = raw.replaceAll('\r\n', '\n');
     if (!normalized.startsWith('---\n')) return null;
     final close = normalized.indexOf('\n---', 4);
     if (close < 0) return null;
+
     final frontmatter = normalized.substring(4, close);
     final bodyStart = normalized.indexOf('\n', close + 4);
     if (bodyStart < 0) return null;
     final instructions = normalized.substring(bodyStart + 1).trim();
     if (instructions.isEmpty) return null;
 
-    final nameValue = _frontmatterScalar(frontmatter, 'name');
-    final descriptionValue = _frontmatterScalar(frontmatter, 'description');
-    final rawName = (nameValue == null || nameValue.isEmpty) ? fallbackName : nameValue;
+    final declaredName = _readScalar(frontmatter, 'name');
+    final description = (_readScalar(frontmatter, 'description') ?? '').trim();
+    final rawName = declaredName == null || declaredName.isEmpty
+        ? fallbackName
+        : declaredName;
     final id = _slug(rawName);
-    final description = (descriptionValue ?? '').trim();
     if (id.isEmpty || description.isEmpty) return null;
 
     return AgentSkill(
       id: id,
       name: rawName.replaceAll('-', ' ').trim(),
-      description: description.length > 1024 ? description.substring(0, 1024) : description,
-      instructions: instructions.length > 14000 ? instructions.substring(0, 14000) : instructions,
+      description: description.length > 1024
+          ? description.substring(0, 1024)
+          : description,
+      instructions: instructions.length > 14000
+          ? instructions.substring(0, 14000)
+          : instructions,
       source: source,
       isBuiltIn: isBuiltIn,
     );
   }
 
-  String? _frontmatterScalar(String frontmatter, String key) {
+  String? _readScalar(String frontmatter, String key) {
     for (final line in frontmatter.split('\n')) {
-      final match = RegExp('^\\s*' + RegExp.escape(key) + r'\s*:\s*(.*?)\s*).firstMatch(line);
+      final match = RegExp(
+        '^\\s*' + RegExp.escape(key) + '\\s*:\\s*(.*?)\\s*\$',
+      ).firstMatch(line);
       if (match == null) continue;
       var value = match.group(1)!.trim();
       if (value.length >= 2 &&
           ((value.startsWith('"') && value.endsWith('"')) ||
-           (value.startsWith("'") && value.endsWith("'")))) {
+              (value.startsWith("'") && value.endsWith("'")))) {
         value = value.substring(1, value.length - 1);
       }
       return value;
@@ -202,16 +212,15 @@ class AiAgentSkillsService {
     return null;
   }
 
-  String _slug(String input) {
-    final slug = input.trim().toLowerCase()
-      .replaceAll(RegExp(r'[^a-z0-9]+'), '-')
-      .replaceAll(RegExp(r'^-+|-+$'), '');
-    if (slug.length > 64) return slug.substring(0, 64).replaceAll(RegExp(r'-+$'), '');
-    return slug;
+  String _slug(String value) {
+    final result = value.toLowerCase().trim()
+        .replaceAll(RegExp(r'[^a-z0-9]+'), '-')
+        .replaceAll(RegExp(r'^-+|-+$'), '');
+    if (result.length <= 64) return result;
+    return result.substring(0, 64).replaceAll(RegExp(r'-+$'), '');
   }
 
-  /// Returns pinned skills plus the best task-matched skills. Skill bodies
-  /// are loaded only for the current request (progressive disclosure).
+  /// Keeps pinned skills active and loads only a few task-relevant skills.
   List<AgentSkill> selectForTask(
     List<AgentSkill> available,
     String task,
@@ -222,36 +231,40 @@ class AiAgentSkillsService {
     for (final skill in available) {
       if (pinnedIds.contains(skill.id)) selected[skill.id] = skill;
     }
+
     final prompt = task.toLowerCase();
     final isCodingTask = RegExp(
       r'\b(create|build|implement|add|fix|debug|refactor|rewrite|update|code|write|generate|develop|test|design|integrat|support)\w*\b',
     ).hasMatch(prompt);
-    final implementation = available.where((s) => s.id == 'coding-implementation');
-    if (isCodingTask && implementation.isNotEmpty) {
-      selected[implementation.first.id] = implementation.first;
+    for (final skill in available) {
+      if (isCodingTask && skill.id == 'coding-implementation') {
+        selected[skill.id] = skill;
+      }
     }
 
     final promptWords = _words(prompt);
     final scored = <_ScoredSkill>[];
     for (final skill in available) {
       if (selected.containsKey(skill.id)) continue;
-      final idWords = _words(skill.id.replaceAll('-', ' '));
-      final descriptionWords = _words(skill.description);
-      final keywords = <String>{...idWords, ...descriptionWords}
-        .where((word) => word.length >= 4 && !_stopWords.contains(word))
-        .toSet();
+      final keywords = <String>{
+        ..._words(skill.id.replaceAll('-', ' ')),
+        ..._words(skill.description),
+      }.where((word) => word.length >= 4 && !_stopWords.contains(word)).toSet();
+
       var score = 0;
       for (final word in keywords) {
         if (promptWords.contains(word)) score += word.length >= 7 ? 2 : 1;
-        // Simple prefix matching helps e.g. "authentication" match "auth".
-        if (word.length >= 5 && promptWords.any((input) =>
-            input.length >= 5 && (input.startsWith(word) || word.startsWith(input)))) {
+        if (word.length >= 5 &&
+            promptWords.any((input) =>
+                input.length >= 5 &&
+                (input.startsWith(word) || word.startsWith(input)))) {
           score++;
         }
       }
       if (score > 0) scored.add(_ScoredSkill(skill, score));
     }
     scored.sort((a, b) => b.score.compareTo(a.score));
+
     var automatic = 0;
     for (final entry in scored) {
       if (automatic >= maxAutomatic || selected.length >= 5) break;
@@ -261,97 +274,11 @@ class AiAgentSkillsService {
     return selected.values.toList(growable: false);
   }
 
-  Set<String> _words(String text) {
-    return RegExp(r'[a-z0-9]{3,}').allMatches(text)
+  Set<String> _words(String text) => RegExp(r'[a-z0-9]{3,}')
+      .allMatches(text)
       .map((match) => match.group(0)!)
       .where((word) => !_stopWords.contains(word))
       .toSet();
-  }
-}
-
-class _ScoredSkill {
-  const _ScoredSkill(this.skill, this.score);
-  final AgentSkill skill;
-  final int score;
-}
-).firstMatch(line);
-      if (match == null) continue;
-      var value = match.group(1)!.trim();
-      if (value.length >= 2 &&
-          ((value.startsWith('"') && value.endsWith('"')) ||
-           (value.startsWith("'") && value.endsWith("'")))) {
-        value = value.substring(1, value.length - 1);
-      }
-      return value;
-    }
-    return null;
-  }
-
-  String _slug(String input) {
-    final slug = input.trim().toLowerCase()
-      .replaceAll(RegExp(r'[^a-z0-9]+'), '-')
-      .replaceAll(RegExp(r'^-+|-+$'), '');
-    if (slug.length > 64) return slug.substring(0, 64).replaceAll(RegExp(r'-+$'), '');
-    return slug;
-  }
-
-  /// Returns pinned skills plus the best task-matched skills. Skill bodies
-  /// are loaded only for the current request (progressive disclosure).
-  List<AgentSkill> selectForTask(
-    List<AgentSkill> available,
-    String task,
-    Set<String> pinnedIds, {
-    int maxAutomatic = 3,
-  }) {
-    final selected = <String, AgentSkill>{};
-    for (final skill in available) {
-      if (pinnedIds.contains(skill.id)) selected[skill.id] = skill;
-    }
-    final prompt = task.toLowerCase();
-    final isCodingTask = RegExp(
-      r'\\b(create|build|implement|add|fix|debug|refactor|rewrite|update|code|write|generate|develop|test|design|integrat|support)\\w*\\b',
-    ).hasMatch(prompt);
-    final implementation = available.where((s) => s.id == 'coding-implementation');
-    if (isCodingTask && implementation.isNotEmpty) {
-      selected[implementation.first.id] = implementation.first;
-    }
-
-    final promptWords = _words(prompt);
-    final scored = <_ScoredSkill>[];
-    for (final skill in available) {
-      if (selected.containsKey(skill.id)) continue;
-      final idWords = _words(skill.id.replaceAll('-', ' '));
-      final descriptionWords = _words(skill.description);
-      final keywords = <String>{...idWords, ...descriptionWords}
-        .where((word) => word.length >= 4 && !_stopWords.contains(word))
-        .toSet();
-      var score = 0;
-      for (final word in keywords) {
-        if (promptWords.contains(word)) score += word.length >= 7 ? 2 : 1;
-        // Simple prefix matching helps e.g. "authentication" match "auth".
-        if (word.length >= 5 && promptWords.any((input) =>
-            input.length >= 5 && (input.startsWith(word) || word.startsWith(input)))) {
-          score++;
-        }
-      }
-      if (score > 0) scored.add(_ScoredSkill(skill, score));
-    }
-    scored.sort((a, b) => b.score.compareTo(a.score));
-    var automatic = 0;
-    for (final entry in scored) {
-      if (automatic >= maxAutomatic || selected.length >= 5) break;
-      selected[entry.skill.id] = entry.skill;
-      automatic++;
-    }
-    return selected.values.toList(growable: false);
-  }
-
-  Set<String> _words(String text) {
-    return RegExp(r'[a-z0-9]{3,}').allMatches(text)
-      .map((match) => match.group(0)!)
-      .where((word) => !_stopWords.contains(word))
-      .toSet();
-  }
 }
 
 class _ScoredSkill {

@@ -26,3 +26,11 @@ dev_dependencies:
 
 flutter:
   uses-material-design: true
+  assets:
+    - assets/agent_skills/coding-implementation/SKILL.md
+    - assets/agent_skills/debugging/SKILL.md
+    - assets/agent_skills/flutter-development/SKILL.md
+    - assets/agent_skills/ui-ux-design/SKILL.md
+    - assets/agent_skills/testing/SKILL.md
+    - assets/agent_skills/secure-code-review/SKILL.md
+    - assets/agent_skills/api-integration/SKILL.md

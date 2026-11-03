@@ -234,7 +234,7 @@ class AiAgentSkillsService {
 
     final prompt = task.toLowerCase();
     final isCodingTask = RegExp(
-      r'\b(create|build|implement|add|fix|debug|refactor|rewrite|update|code|write|generate|develop|test|design|integrat|support)\w*\b',
+      r'\b(create|build|implement|add|fix|debug|refactor|rewrite|update|code|write|generate|develop|test|design|integrat|support|buat|bikin|tambah|tambahkan|perbaiki|betulin|ubah|rubah|koding|aplikasi|fitur|error|gagal|rusak|perbarui)\w*\b',
     ).hasMatch(prompt);
     for (final skill in available) {
       if (isCodingTask && skill.id == 'coding-implementation') {

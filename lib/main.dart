@@ -1,5 +1,6 @@
 import 'dart:io';
 import 'dart:math' as math;
+import 'dart:ui' as ui;
 
 import 'package:code_text_field/code_text_field.dart';
 import 'package:file_selector/file_selector.dart' as fs;
@@ -37,13 +38,14 @@ import 'package:path/path.dart' as p;
 import 'ai_agent_context.dart';
 import 'ai_agent_panel.dart';
 
-const bg = Color(0xFF0D1117);
-const panel = Color(0xFF111821);
-const surface = Color(0xFF151F2B);
-const border = Color(0xFF243140);
-const muted = Color(0xFF8B98A9);
-const foreground = Color(0xFFE6EDF3);
-const accent = Color(0xFF62D3CE);
+const bg = Color(0xFF080D16);
+const panel = Color(0xE6121B29);
+const surface = Color(0xE81B2838);
+const border = Color(0x66465B74);
+const muted = Color(0xFF9AAAC0);
+const foreground = Color(0xFFF0F4FA);
+const accent = Color(0xFF7DE6DB);
+const accentViolet = Color(0xFF9CA3FF);
 
 void main() {
   WidgetsFlutterBinding.ensureInitialized();
@@ -65,26 +67,31 @@ class NexusIdeApp extends StatelessWidget {
       theme: ThemeData(
         useMaterial3: true,
         brightness: Brightness.dark,
-        colorScheme: colors.copyWith(primary: accent, surface: panel),
+        colorScheme: colors.copyWith(
+          primary: accent,
+          secondary: accentViolet,
+          surface: panel,
+          outline: border,
+        ),
         scaffoldBackgroundColor: bg,
         dividerColor: border,
         splashColor: accent.withOpacity(0.08),
         highlightColor: accent.withOpacity(0.04),
         inputDecorationTheme: InputDecorationTheme(
           filled: true,
-          fillColor: surface,
+          fillColor: const Color(0xD5192535),
           contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
           border: OutlineInputBorder(
-            borderRadius: BorderRadius.circular(10),
+            borderRadius: BorderRadius.circular(12),
             borderSide: const BorderSide(color: border),
           ),
           enabledBorder: OutlineInputBorder(
-            borderRadius: BorderRadius.circular(10),
+            borderRadius: BorderRadius.circular(12),
             borderSide: const BorderSide(color: border),
           ),
           focusedBorder: OutlineInputBorder(
-            borderRadius: BorderRadius.circular(10),
-            borderSide: const BorderSide(color: accent, width: 1.4),
+            borderRadius: BorderRadius.circular(12),
+            borderSide: const BorderSide(color: accent, width: 1.25),
           ),
         ),
         filledButtonTheme: FilledButtonThemeData(
@@ -101,9 +108,12 @@ class NexusIdeApp extends StatelessWidget {
         tooltipTheme: TooltipThemeData(
           waitDuration: const Duration(milliseconds: 350),
           decoration: BoxDecoration(
-            color: surface,
+            color: const Color(0xF01B2838),
             border: Border.all(color: border),
-            borderRadius: BorderRadius.circular(8),
+            borderRadius: BorderRadius.circular(10),
+            boxShadow: const [
+              BoxShadow(color: Color(0x26000000), blurRadius: 18, offset: Offset(0, 6)),
+            ],
           ),
           textStyle: const TextStyle(color: foreground, fontSize: 11),
         ),
@@ -517,13 +527,48 @@ class _IdeHomeState extends State<IdeHome> {
               backgroundColor: bg,
               drawer: compact
                   ? Drawer(
-                      backgroundColor: panel,
+                      backgroundColor: const Color(0xF0121B29),
                       width: math.min(constraints.maxWidth * 0.84, 320.0),
                       child: SafeArea(child: explorer),
                     )
                   : null,
-              body: SafeArea(
-                child: Column(
+              body: Stack(
+                children: [
+                  const Positioned.fill(child: ColoredBox(color: bg)),
+                  Positioned(
+                    left: -190,
+                    top: -240,
+                    child: IgnorePointer(
+                      child: Container(
+                        width: 600,
+                        height: 600,
+                        decoration: const BoxDecoration(
+                          shape: BoxShape.circle,
+                          gradient: RadialGradient(
+                            colors: [Color(0x2862D8D0), Color(0x00080D16)],
+                          ),
+                        ),
+                      ),
+                    ),
+                  ),
+                  Positioned(
+                    right: -260,
+                    bottom: -320,
+                    child: IgnorePointer(
+                      child: Container(
+                        width: 700,
+                        height: 700,
+                        decoration: const BoxDecoration(
+                          shape: BoxShape.circle,
+                          gradient: RadialGradient(
+                            colors: [Color(0x1F858AF8), Color(0x00080D16)],
+                          ),
+                        ),
+                      ),
+                    ),
+                  ),
+                  SafeArea(
+                    child: Column(
                   children: [
                     WindowHeader(
                       compact: compact,
@@ -563,9 +608,16 @@ class _IdeHomeState extends State<IdeHome> {
                           if (!compact)
                             Container(
                               width: 264,
-                              decoration: const BoxDecoration(
+                              decoration: BoxDecoration(
                                 color: panel,
-                                border: Border(right: BorderSide(color: border)),
+                                border: const Border(right: BorderSide(color: border)),
+                                boxShadow: const [
+                                  BoxShadow(
+                                    color: Color(0x1C000000),
+                                    blurRadius: 22,
+                                    offset: Offset(5, 0),
+                                  ),
+                                ],
                               ),
                               child: explorer,
                             ),
@@ -606,6 +658,8 @@ class _IdeHomeState extends State<IdeHome> {
                   ],
                 ),
               ),
+                ],
+              ),
             );
           },
         ),
@@ -640,14 +694,24 @@ class WindowHeader extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Container(
-      height: 54,
-      padding: const EdgeInsets.symmetric(horizontal: 12),
-      decoration: const BoxDecoration(
-        color: panel,
-        border: Border(bottom: BorderSide(color: border)),
-      ),
-      child: Row(
+    return ClipRect(
+      child: BackdropFilter(
+        filter: ui.ImageFilter.blur(sigmaX: 14, sigmaY: 14),
+        child: Container(
+          height: 54,
+          padding: const EdgeInsets.symmetric(horizontal: 12),
+          decoration: BoxDecoration(
+            gradient: const LinearGradient(
+              begin: Alignment.topLeft,
+              end: Alignment.bottomRight,
+              colors: [Color(0xE61B2939), Color(0xD90E1724)],
+            ),
+            border: const Border(bottom: BorderSide(color: Color(0x664D657E))),
+            boxShadow: const [
+              BoxShadow(color: Color(0x24000000), blurRadius: 24, offset: Offset(0, 5)),
+            ],
+          ),
+          child: Row(
         children: [
           if (compact)
             IconButton(
@@ -749,7 +813,9 @@ class WindowHeader extends StatelessWidget {
           ),
         ],
       ),
-    );
+          ),
+        ),
+      );
   }
 }
 
@@ -763,9 +829,19 @@ class BrandMark extends StatelessWidget {
       width: size,
       height: size,
       decoration: BoxDecoration(
-        color: accent.withOpacity(0.13),
-        borderRadius: BorderRadius.circular(9),
-        border: Border.all(color: accent.withOpacity(0.28)),
+        gradient: LinearGradient(
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+          colors: [
+            accent.withOpacity(0.22),
+            accentViolet.withOpacity(0.12),
+          ],
+        ),
+        borderRadius: BorderRadius.circular(10),
+        border: Border.all(color: accent.withOpacity(0.34)),
+        boxShadow: [
+          BoxShadow(color: accent.withOpacity(0.10), blurRadius: 16, spreadRadius: 1),
+        ],
       ),
       child: Icon(Icons.terminal_rounded, color: accent, size: size * 0.62),
     );
@@ -780,7 +856,7 @@ class ActivityRail extends StatelessWidget {
     return Container(
       width: 50,
       decoration: const BoxDecoration(
-        color: bg,
+        color: Color(0xB3080D16),
         border: Border(right: BorderSide(color: border)),
       ),
       child: Column(
@@ -854,7 +930,14 @@ class _WorkspaceExplorerState extends State<WorkspaceExplorer> {
   @override
   Widget build(BuildContext context) {
     return Container(
-      color: panel,
+      decoration: BoxDecoration(
+        color: panel,
+        gradient: const LinearGradient(
+          begin: Alignment.topCenter,
+          end: Alignment.bottomCenter,
+          colors: [Color(0xD91A2737), Color(0xC9111927)],
+        ),
+      ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
@@ -1332,7 +1415,11 @@ class _EditorTabsState extends State<EditorTabs> {
     return Container(
       height: 44,
       decoration: const BoxDecoration(
-        color: panel,
+        gradient: LinearGradient(
+          begin: Alignment.topCenter,
+          end: Alignment.bottomCenter,
+          colors: [Color(0xDD192636), Color(0xC5111927)],
+        ),
         border: Border(bottom: BorderSide(color: border)),
       ),
       child: widget.documents.isEmpty
@@ -1367,7 +1454,8 @@ class _EditorTabsState extends State<EditorTabs> {
                           height: 40,
                           padding: const EdgeInsets.only(left: 12, right: 6),
                           decoration: BoxDecoration(
-                            color: selected ? bg : panel,
+                            color: selected ? const Color(0xD51D2C3D) : Colors.transparent,
+                            borderRadius: const BorderRadius.vertical(top: Radius.circular(8)),
                             border: Border(
                               right: const BorderSide(color: border),
                               top: BorderSide(
@@ -1375,6 +1463,11 @@ class _EditorTabsState extends State<EditorTabs> {
                                 width: 2,
                               ),
                             ),
+                            boxShadow: selected
+                                ? const [
+                                    BoxShadow(color: Color(0x0F7DE6DB), blurRadius: 12, offset: Offset(0, 2)),
+                                  ]
+                                : null,
                           ),
                           child: Row(
                             children: [
@@ -1563,7 +1656,11 @@ class CodeEditor extends StatelessWidget {
           height: 34,
           padding: const EdgeInsets.symmetric(horizontal: 16),
           decoration: const BoxDecoration(
-            color: bg,
+            gradient: LinearGradient(
+              begin: Alignment.centerLeft,
+              end: Alignment.centerRight,
+              colors: [Color(0xE0182433), Color(0xE50D1521)],
+            ),
             border: Border(bottom: BorderSide(color: border)),
           ),
           child: Row(
@@ -1634,8 +1731,12 @@ class StatusBar extends StatelessWidget {
       height: 25,
       padding: const EdgeInsets.symmetric(horizontal: 10),
       decoration: BoxDecoration(
-        color: surface,
-        border: Border(top: BorderSide(color: accent.withOpacity(0.45))),
+        gradient: const LinearGradient(
+          begin: Alignment.centerLeft,
+          end: Alignment.centerRight,
+          colors: [Color(0xF21A2939), Color(0xDF101824)],
+        ),
+        border: Border(top: BorderSide(color: accent.withOpacity(0.52))),
       ),
       child: Row(
         children: [

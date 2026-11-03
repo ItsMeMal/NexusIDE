@@ -49,7 +49,33 @@ class AiAgentSkillsService {
     'nexuside', 'please', 'project', 'should', 'that', 'their', 'them',
     'then', 'this', 'with', 'when', 'where', 'will', 'work', 'your',
     'using', 'want', 'feature', 'change', 'build', 'create', 'implement',
-    'update', 'support',
+    'update', 'support', 'buat', 'bikin', 'tambah', 'tambahkan', 'perbaiki',
+    'betulin', 'ubah', 'rubah', 'aplikasi', 'fitur', 'dong', 'saya', 'yang',
+    'untuk', 'dengan', 'pada', 'dari', 'agar', 'bisa', 'juga', 'ini',
+  };
+
+  static const _skillAliases = <String, Set<String>>{
+    'ui-ux-design': <String>{
+      'ui', 'ux', 'interface', 'screen', 'layout', 'styling', 'frontend',
+      'responsive', 'visual', 'design', 'accessibility',
+    },
+    'flutter-development': <String>{
+      'flutter', 'dart', 'widget', 'windows', 'android', 'mobile',
+    },
+    'api-integration': <String>{
+      'api', 'oauth', 'rest', 'endpoint', 'http', 'json', 'gateway', 'token',
+    },
+    'secure-code-review': <String>{
+      'security', 'auth', 'oauth', 'secret', 'credential', 'vulnerability',
+      'validation', 'permission', 'token',
+    },
+    'debugging': <String>{
+      'error', 'exception', 'stack', 'trace', 'bug', 'crash', 'failed',
+    },
+    'testing': <String>{
+      'test', 'testing', 'unit', 'widget', 'integration', 'coverage',
+      'regression', 'verify',
+    },
   };
 
   Future<List<AgentSkill>> loadSkills(String? workspacePath) async {
@@ -249,7 +275,10 @@ class AiAgentSkillsService {
       final keywords = <String>{
         ..._words(skill.id.replaceAll('-', ' ')),
         ..._words(skill.description),
-      }.where((word) => word.length >= 4 && !_stopWords.contains(word)).toSet();
+        ...?_skillAliases[skill.id],
+      }.where((word) =>
+          (word.length >= 3 || word == 'ui' || word == 'ux') &&
+          !_stopWords.contains(word)).toSet();
 
       var score = 0;
       for (final word in keywords) {
@@ -274,7 +303,7 @@ class AiAgentSkillsService {
     return selected.values.toList(growable: false);
   }
 
-  Set<String> _words(String text) => RegExp(r'[a-z0-9]{3,}')
+  Set<String> _words(String text) => RegExp(r'[a-z0-9]{2,}')
       .allMatches(text)
       .map((match) => match.group(0)!)
       .where((word) => !_stopWords.contains(word))

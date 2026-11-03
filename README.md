@@ -21,6 +21,8 @@ NexusIDE is a cross-platform Flutter coding workspace. The Windows layout follow
 - Choose any model exposed by the gateway from the Agent composer; the model list can be refreshed and the selection is remembered on the device.
 - The Agent reads the workspace tree plus relevant source and configuration files automatically; unsaved editor buffers take priority, and sensitive files are excluded.
 - Coding requests can propose up to 16 complete file creations/updates in one response, including multi-file implementations; review the complete changes before applying them.
+- Agent Skills use the portable `SKILL.md` format. Seven bundled skills cover implementation, debugging, Flutter, UI/UX, testing, secure coding, and API integration. Workspace skills are discovered under `.agents/skills`, `.claude/skills`, `.github/skills`, `.cursor/skills`, `.skills`, or `skills`.
+- Relevant skills are auto-loaded per task. Pin skills in the Agent Skills picker to include them every time. Skill scripts are never executed by the Agent.
 - Ask questions about code or request file changes.
 - Review proposed file changes before applying them; the Agent never writes a proposal automatically.
 - Sign out attempts to revoke the NexusIDE-generated API key and ends the gateway account session.

@@ -223,9 +223,12 @@ class AiAgentSkillsService {
 
   String? _readScalar(String frontmatter, String key) {
     for (final line in frontmatter.split('\n')) {
-      final match = RegExp(r'^\s*' + RegExp.escape(key) + r'\s*:\s*(.*?)\s*
-      if (match == null) continue;
-      var value = match.group(1)!.trim();
+      final trimmed = line.trim();
+      final colon = trimmed.indexOf(':');
+      if (colon < 0 || trimmed.substring(0, colon).trim() != key) {
+        continue;
+      }
+      var value = trimmed.substring(colon + 1).trim();
       if (value.length >= 2 &&
           ((value.startsWith('"') && value.endsWith('"')) ||
               (value.startsWith("'") && value.endsWith("'")))) {

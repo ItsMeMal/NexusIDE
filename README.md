@@ -11,6 +11,7 @@ NexusIDE is a cross-platform Flutter coding workspace. The Windows layout follow
 - Syntax highlighting and line numbers for common programming languages.
 - Confirm before discarding unsaved changes.
 - Use a responsive Explorer drawer on narrow screens.
+- A restrained liquid-glass visual theme across the app chrome, welcome panel, AI Agent, and change review dialog; the code canvas stays crisp for readability.
 
 ## Stage 2 — AI Agent basics
 

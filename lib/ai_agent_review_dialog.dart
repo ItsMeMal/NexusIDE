@@ -1,12 +1,12 @@
 import 'package:flutter/material.dart';
 import 'ai_agent_proposals.dart';
 
-const _reviewPanel = Color(0xFF111821);
-const _reviewBg = Color(0xFF0D1117);
-const _reviewBorder = Color(0xFF243140);
-const _reviewText = Color(0xFFE6EDF3);
-const _reviewMuted = Color(0xFF8B98A9);
-const _reviewAccent = Color(0xFF62D3CE);
+const _reviewPanel = Color(0xF0131D2B);
+const _reviewBg = Color(0xF009111D);
+const _reviewBorder = Color(0x66465B74);
+const _reviewText = Color(0xFFF0F4FA);
+const _reviewMuted = Color(0xFF9AAAC0);
+const _reviewAccent = Color(0xFF7DE6DB);
 
 class AiAgentReviewDialog extends StatelessWidget {
   const AiAgentReviewDialog({required this.changes, super.key});
@@ -16,7 +16,23 @@ class AiAgentReviewDialog extends StatelessWidget {
   Widget build(BuildContext context) {
     return Dialog(
       backgroundColor: _reviewPanel,
-      child: ConstrainedBox(
+      elevation: 24,
+      shadowColor: const Color(0x85000000),
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(20),
+        side: const BorderSide(color: Color(0x664B617B)),
+      ),
+      child: ClipRRect(
+        borderRadius: BorderRadius.circular(20),
+        child: Container(
+          decoration: const BoxDecoration(
+            gradient: LinearGradient(
+              begin: Alignment.topLeft,
+              end: Alignment.bottomRight,
+              colors: [Color(0xF01A2939), Color(0xE90C1522)],
+            ),
+          ),
+          child: ConstrainedBox(
         constraints: const BoxConstraints(maxWidth: 1000, maxHeight: 680),
         child: Padding(
           padding: const EdgeInsets.all(16),
@@ -54,6 +70,7 @@ class AiAgentReviewDialog extends StatelessWidget {
               ),
             ]),
           ]),
+          ),
         ),
       ),
     );

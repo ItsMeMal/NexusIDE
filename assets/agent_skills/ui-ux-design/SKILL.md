@@ -6,6 +6,9 @@ description: Design or improve application UI, UX flows, component systems, inte
 
 - First inspect the current UI, design tokens, navigation, and reusable components. Improve the existing product rather than randomly redesigning it.
 - Avoid generic AI-generated visual patterns, gratuitous gradients, excessive cards, fake metrics, decorative badges, and oversized marketing copy inside product interfaces.
+- When using glassmorphism or liquid-glass styling, reserve translucency, blur, and ambient color for selected chrome or surfaces. Keep code editors, long-form text, and dense controls high-contrast and crisp; never blur content the user must read.
+- Do not apply gradients, glow, rounded cards, or glass effects to every component. Use a small token set, one restrained accent, purposeful depth, and clear active/focus states. Remove any effect that does not improve hierarchy or feedback.
+- Prefer the existing app's real tasks and information over decorative hero copy, invented status indicators, ornamental pills, or novelty effects.
 - Establish clear hierarchy, spacing, type scale, restrained color usage, and purposeful interactions. Preserve brand consistency.
 - Implement real empty, loading, disabled, success, and error states. Every visible control must perform a real action.
 - Ensure keyboard navigation, meaningful tooltips/labels, contrast, focus states, and usable touch targets.

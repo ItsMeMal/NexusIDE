@@ -202,13 +202,15 @@ class _AiAgentPanelState extends State<AiAgentPanel> {
     if (mounted) setState(() => _loadingSkills = true);
     try {
       final loaded = await _skillsService.loadSkills(widget.workspacePath);
-      final saved = await _secureStorage.read(key: _pinnedSkillsName);
       final pinned = <String>{};
-      if (saved != null && saved.isNotEmpty) {
-        try {
+      try {
+        final saved = await _secureStorage.read(key: _pinnedSkillsName);
+        if (saved != null && saved.isNotEmpty) {
           final decoded = jsonDecode(saved);
           if (decoded is List) pinned.addAll(decoded.whereType<String>());
-        } catch (_) {}
+        }
+      } catch (_) {
+        // Skill discovery still works if the platform cannot persist preferences.
       }
       final validIds = loaded.map((skill) => skill.id).toSet();
       pinned.removeWhere((id) => !validIds.contains(id));

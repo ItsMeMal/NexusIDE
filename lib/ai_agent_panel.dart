@@ -2,6 +2,7 @@ import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
 import 'dart:math' as math;
+import 'dart:ui' as ui;
 
 import 'package:crypto/crypto.dart';
 import 'package:flutter/material.dart';
@@ -16,12 +17,12 @@ import 'ai_agent_review_dialog.dart';
 import 'ai_agent_service.dart';
 import 'ai_agent_skills.dart';
 
-const _agentPanel = Color(0xFF111821);
-const _agentBg = Color(0xFF0D1117);
-const _agentBorder = Color(0xFF243140);
-const _agentText = Color(0xFFE6EDF3);
-const _agentMuted = Color(0xFF8B98A9);
-const _agentAccent = Color(0xFF62D3CE);
+const _agentPanel = Color(0xE6121B29);
+const _agentBg = Color(0xF009111D);
+const _agentBorder = Color(0x66465B74);
+const _agentText = Color(0xFFF0F4FA);
+const _agentMuted = Color(0xFF9AAAC0);
+const _agentAccent = Color(0xFF7DE6DB);
 
 class AiAgentPanel extends StatefulWidget {
   const AiAgentPanel({
@@ -815,7 +816,16 @@ class _AiAgentPanelState extends State<AiAgentPanel> {
           child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
             Container(
               width: 52, height: 52,
-              decoration: BoxDecoration(color: _agentAccent.withOpacity(0.12), borderRadius: BorderRadius.circular(15), border: Border.all(color: _agentAccent.withOpacity(0.3))),
+              decoration: BoxDecoration(
+                gradient: LinearGradient(
+                  begin: Alignment.topLeft,
+                  end: Alignment.bottomRight,
+                  colors: [_agentAccent.withOpacity(0.22), const Color(0x229CA3FF)],
+                ),
+                borderRadius: BorderRadius.circular(16),
+                border: Border.all(color: _agentAccent.withOpacity(0.32)),
+                boxShadow: [BoxShadow(color: _agentAccent.withOpacity(0.10), blurRadius: 20)],
+              ),
               child: const Icon(Icons.link_rounded, color: _agentAccent, size: 27),
             ),
             const SizedBox(height: 20),
@@ -853,13 +863,33 @@ class _AiAgentPanelState extends State<AiAgentPanel> {
 
   @override
   Widget build(BuildContext context) {
-    return Container(
-      decoration: const BoxDecoration(color: _agentPanel, border: Border(left: BorderSide(color: _agentBorder))),
-      child: Column(children: [
+    return ClipRect(
+      child: BackdropFilter(
+        filter: ui.ImageFilter.blur(sigmaX: 13, sigmaY: 13),
+        child: Container(
+          decoration: BoxDecoration(
+            gradient: const LinearGradient(
+              begin: Alignment.topLeft,
+              end: Alignment.bottomRight,
+              colors: [Color(0xE8172434), Color(0xE00B121E)],
+            ),
+            border: const Border(left: BorderSide(color: Color(0x664B617B))),
+            boxShadow: const [
+              BoxShadow(color: Color(0x2E000000), blurRadius: 26, offset: Offset(-8, 0)),
+            ],
+          ),
+          child: Column(children: [
         Container(
           height: 46,
           padding: const EdgeInsets.symmetric(horizontal: 12),
-          decoration: const BoxDecoration(border: Border(bottom: BorderSide(color: _agentBorder))),
+          decoration: const BoxDecoration(
+            gradient: LinearGradient(
+              begin: Alignment.centerLeft,
+              end: Alignment.centerRight,
+              colors: [Color(0xD91B2A3C), Color(0xB90E1724)],
+            ),
+            border: Border(bottom: BorderSide(color: _agentBorder)),
+          ),
           child: Row(children: [
             const Icon(Icons.auto_awesome_rounded, size: 17, color: _agentAccent),
             const SizedBox(width: 8),
@@ -877,8 +907,13 @@ class _AiAgentPanelState extends State<AiAgentPanel> {
           Container(
             width: double.infinity,
             padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-            color: _statusError ? const Color(0xFF3A2026) : const Color(0xFF172A2B),
-            child: Text(_status!, style: TextStyle(color: _statusError ? const Color(0xFFFFA7AE) : const Color(0xFFA7E8E2), fontSize: 11, height: 1.35)),
+            decoration: BoxDecoration(
+              color: _statusError ? const Color(0xD83A2026) : const Color(0xD7193438),
+              border: Border.all(color: _statusError ? const Color(0x664E3038) : const Color(0x554B8582)),
+              borderRadius: BorderRadius.circular(10),
+            ),
+            margin: const EdgeInsets.fromLTRB(10, 7, 10, 0),
+            child: Text(_status!, style: TextStyle(color: _statusError ? const Color(0xFFFFB5BC) : const Color(0xFFB3F1E9), fontSize: 11, height: 1.4)),
           ),
         if (!_signedIn)
           Expanded(child: _buildLoginView())
@@ -911,7 +946,27 @@ class _AiAgentPanelState extends State<AiAgentPanel> {
                   constraints: const BoxConstraints(maxWidth: 600),
                   margin: const EdgeInsets.only(bottom: 10),
                   padding: const EdgeInsets.all(10),
-                  decoration: BoxDecoration(color: isUser ? const Color(0xFF193336) : const Color(0xFF121A24), borderRadius: BorderRadius.only(topLeft: const Radius.circular(14), topRight: const Radius.circular(14), bottomLeft: Radius.circular(isUser ? 14 : 4), bottomRight: Radius.circular(isUser ? 4 : 14)), border: Border.all(color: isUser ? const Color(0xFF285052) : _agentBorder)),
+                  decoration: BoxDecoration(
+                    gradient: LinearGradient(
+                      begin: Alignment.topLeft,
+                      end: Alignment.bottomRight,
+                      colors: isUser
+                          ? const [Color(0xD52A4D51), Color(0xBC173238)]
+                          : const [Color(0xD51B2939), Color(0xC0101825)],
+                    ),
+                    borderRadius: BorderRadius.only(
+                      topLeft: const Radius.circular(15),
+                      topRight: const Radius.circular(15),
+                      bottomLeft: Radius.circular(isUser ? 15 : 5),
+                      bottomRight: Radius.circular(isUser ? 5 : 15),
+                    ),
+                    border: Border.all(
+                      color: isUser ? const Color(0x664A908F) : const Color(0x66465B74),
+                    ),
+                    boxShadow: isUser
+                        ? [BoxShadow(color: _agentAccent.withOpacity(0.04), blurRadius: 18)]
+                        : null,
+                  ),
                   child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
                     Text(isUser ? 'YOU' : _modelId.toUpperCase(), maxLines: 1, overflow: TextOverflow.ellipsis, style: TextStyle(color: isUser ? _agentAccent : _agentMuted, fontSize: 9, fontWeight: FontWeight.w700)),
                     const SizedBox(height: 5),
@@ -932,7 +987,14 @@ class _AiAgentPanelState extends State<AiAgentPanel> {
           )),
           Container(
             padding: const EdgeInsets.all(10),
-            decoration: const BoxDecoration(border: Border(top: BorderSide(color: _agentBorder))),
+            decoration: const BoxDecoration(
+              gradient: LinearGradient(
+                begin: Alignment.topLeft,
+                end: Alignment.bottomRight,
+                colors: [Color(0xDB182637), Color(0xF20A111C)],
+              ),
+              border: Border(top: BorderSide(color: _agentBorder)),
+            ),
             child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
               TextField(
                 controller: _prompt,
@@ -941,7 +1003,26 @@ class _AiAgentPanelState extends State<AiAgentPanel> {
                 enabled: !_loading,
                 onSubmitted: (_) => _send(),
                 style: const TextStyle(color: _agentText, fontSize: 12),
-                decoration: InputDecoration(hintText: 'Ask ' + _modelId + ' to build or edit code…', hintStyle: const TextStyle(color: _agentMuted, fontSize: 11), filled: true, fillColor: _agentBg, isDense: true, contentPadding: const EdgeInsets.all(10), border: OutlineInputBorder(borderRadius: BorderRadius.circular(9), borderSide: const BorderSide(color: _agentBorder))),
+                decoration: InputDecoration(
+                  hintText: 'Ask ' + _modelId + ' to build or edit code…',
+                  hintStyle: const TextStyle(color: _agentMuted, fontSize: 11),
+                  filled: true,
+                  fillColor: const Color(0xD909111D),
+                  isDense: true,
+                  contentPadding: const EdgeInsets.all(12),
+                  border: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(12),
+                    borderSide: const BorderSide(color: _agentBorder),
+                  ),
+                  enabledBorder: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(12),
+                    borderSide: const BorderSide(color: _agentBorder),
+                  ),
+                  focusedBorder: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(12),
+                    borderSide: const BorderSide(color: _agentAccent, width: 1.2),
+                  ),
+                ),
               ),
               if (_activeSkillNames.isNotEmpty) ...[
                 const SizedBox(height: 7),
@@ -1019,7 +1100,9 @@ class _AiAgentPanelState extends State<AiAgentPanel> {
             ]),
           ),
         ],
-      ]),
+          ]),
+        ),
+      ),
     );
   }
 }

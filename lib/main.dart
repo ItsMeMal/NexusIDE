@@ -1535,71 +1535,136 @@ class WelcomeView extends StatelessWidget {
       child: SingleChildScrollView(
         padding: const EdgeInsets.all(28),
         child: ConstrainedBox(
-          constraints: const BoxConstraints(maxWidth: 440),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              const BrandMark(size: 48),
-              const SizedBox(height: 24),
-              const Text(
-                'A calmer place to build.',
-                style: TextStyle(
-                  color: foreground,
-                  fontSize: 28,
-                  fontWeight: FontWeight.w700,
-                  letterSpacing: -0.8,
+          constraints: const BoxConstraints(maxWidth: 590),
+          child: ClipRRect(
+            borderRadius: BorderRadius.circular(24),
+            child: BackdropFilter(
+              filter: ui.ImageFilter.blur(sigmaX: 18, sigmaY: 18),
+              child: Container(
+                padding: const EdgeInsets.all(30),
+                decoration: BoxDecoration(
+                  gradient: const LinearGradient(
+                    begin: Alignment.topLeft,
+                    end: Alignment.bottomRight,
+                    colors: [Color(0xE91C2B3B), Color(0xD90D1724)],
+                  ),
+                  borderRadius: BorderRadius.circular(24),
+                  border: Border.all(color: const Color(0x55FFFFFF)),
+                  boxShadow: const [
+                    BoxShadow(
+                      color: Color(0x42000000),
+                      blurRadius: 44,
+                      offset: Offset(0, 18),
+                    ),
+                    BoxShadow(
+                      color: Color(0x127DE6DB),
+                      blurRadius: 28,
+                      offset: Offset(-8, -8),
+                    ),
+                  ],
+                ),
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Row(
+                      children: [
+                        const BrandMark(size: 44),
+                        const SizedBox(width: 12),
+                        Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: const [
+                            Text(
+                              'NEXUSIDE',
+                              style: TextStyle(
+                                color: foreground,
+                                fontSize: 12,
+                                fontWeight: FontWeight.w800,
+                                letterSpacing: 1.3,
+                              ),
+                            ),
+                            SizedBox(height: 4),
+                            Text(
+                              'CODE WORKSPACE',
+                              style: TextStyle(
+                                color: muted,
+                                fontSize: 9,
+                                letterSpacing: 1.5,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 26),
+                    const Text(
+                      'Open a project to begin.',
+                      style: TextStyle(
+                        color: foreground,
+                        fontSize: 29,
+                        fontWeight: FontWeight.w700,
+                        letterSpacing: -0.9,
+                        height: 1.15,
+                      ),
+                    ),
+                    const SizedBox(height: 10),
+                    const Text(
+                      'Browse your files, edit code, and use the AI Agent for multi-file changes with review before applying.',
+                      style: TextStyle(color: muted, height: 1.65, fontSize: 13),
+                    ),
+                    const SizedBox(height: 22),
+                    Wrap(
+                      spacing: 10,
+                      runSpacing: 10,
+                      children: [
+                        FilledButton.icon(
+                          onPressed: onOpenFolder,
+                          icon: const Icon(Icons.folder_open_rounded, size: 18),
+                          label: const Text('Open Folder'),
+                          style: FilledButton.styleFrom(
+                            foregroundColor: bg,
+                            backgroundColor: accent,
+                            padding: const EdgeInsets.symmetric(horizontal: 17, vertical: 13),
+                            textStyle: const TextStyle(fontWeight: FontWeight.w700, fontSize: 12),
+                          ),
+                        ),
+                        OutlinedButton.icon(
+                          onPressed: onOpenFile,
+                          icon: const Icon(Icons.insert_drive_file_outlined, size: 17),
+                          label: const Text('Open File'),
+                          style: OutlinedButton.styleFrom(
+                            foregroundColor: foreground,
+                            side: const BorderSide(color: Color(0x665C728B)),
+                            backgroundColor: const Color(0x241F3042),
+                            padding: const EdgeInsets.symmetric(horizontal: 17, vertical: 13),
+                          ),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 27),
+                    const Divider(color: border, height: 1),
+                    const SizedBox(height: 18),
+                    const WelcomeDetail(
+                      icon: Icons.folder_outlined,
+                      title: 'Project explorer',
+                      subtitle: 'Browse folders and source files.',
+                    ),
+                    const SizedBox(height: 14),
+                    const WelcomeDetail(
+                      icon: Icons.edit_note_rounded,
+                      title: 'Multi-file editing',
+                      subtitle: 'Keep several files open in tabs.',
+                    ),
+                    const SizedBox(height: 14),
+                    const WelcomeDetail(
+                      icon: Icons.save_outlined,
+                      title: 'Save with Ctrl+S',
+                      subtitle: 'Write changes back to the local file.',
+                    ),
+                  ],
                 ),
               ),
-              const SizedBox(height: 10),
-              const Text(
-                'Open a project to start editing. NexusIDE is being built in small, testable stages.',
-                style: TextStyle(color: muted, height: 1.6, fontSize: 13),
-              ),
-              const SizedBox(height: 24),
-              FilledButton.icon(
-                onPressed: onOpenFolder,
-                icon: const Icon(Icons.folder_open_rounded, size: 18),
-                label: const Text('Open Folder'),
-                style: FilledButton.styleFrom(
-                  foregroundColor: bg,
-                  backgroundColor: accent,
-                  padding: const EdgeInsets.symmetric(horizontal: 17, vertical: 13),
-                  textStyle: const TextStyle(fontWeight: FontWeight.w700),
-                ),
-              ),
-              const SizedBox(height: 10),
-              OutlinedButton.icon(
-                onPressed: onOpenFile,
-                icon: const Icon(Icons.insert_drive_file_outlined, size: 18),
-                label: const Text('Open File'),
-                style: OutlinedButton.styleFrom(
-                  foregroundColor: foreground,
-                  side: const BorderSide(color: border),
-                  padding: const EdgeInsets.symmetric(horizontal: 17, vertical: 13),
-                ),
-              ),
-              const SizedBox(height: 28),
-              const Divider(color: border),
-              const SizedBox(height: 13),
-              const WelcomeDetail(
-                icon: Icons.folder_outlined,
-                title: 'Workspace Explorer',
-                subtitle: 'Browse your project folders.',
-              ),
-              const SizedBox(height: 13),
-              const WelcomeDetail(
-                icon: Icons.edit_note_rounded,
-                title: 'Multi-file editing',
-                subtitle: 'Switch between files using tabs.',
-              ),
-              const SizedBox(height: 13),
-              const WelcomeDetail(
-                icon: Icons.save_outlined,
-                title: 'Save with Ctrl+S',
-                subtitle: 'Changes are saved to the local file.',
-              ),
-            ],
+            ),
           ),
         ),
       ),

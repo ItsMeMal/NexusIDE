@@ -197,6 +197,7 @@ class AiAgentWorkspaceContext {
       return false;
     }
     final name = p.basename(normalized).toLowerCase();
+    if (name == 'skill.md') return false;
     if (name == '.env' ||
         (name.startsWith('.env.') &&
             name != '.env.example' &&

@@ -930,9 +930,8 @@ class _WorkspaceExplorerState extends State<WorkspaceExplorer> {
   @override
   Widget build(BuildContext context) {
     return Container(
-      decoration: BoxDecoration(
-        color: panel,
-        gradient: const LinearGradient(
+      decoration: const BoxDecoration(
+        gradient: LinearGradient(
           begin: Alignment.topCenter,
           end: Alignment.bottomCenter,
           colors: [Color(0xD91A2737), Color(0xC9111927)],

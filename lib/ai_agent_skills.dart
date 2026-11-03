@@ -223,9 +223,98 @@ class AiAgentSkillsService {
 
   String? _readScalar(String frontmatter, String key) {
     for (final line in frontmatter.split('\n')) {
-      final match = RegExp(
-        RegExp(r'^\s*' + RegExp.escape(key) + r'\s*:\s*(.*?)\s*$'),
-      ).firstMatch(line);
+      final match = RegExp(r'^\s*' + RegExp.escape(key) + r'\s*:\s*(.*?)\s*
+      if (match == null) continue;
+      var value = match.group(1)!.trim();
+      if (value.length >= 2 &&
+          ((value.startsWith('"') && value.endsWith('"')) ||
+              (value.startsWith("'") && value.endsWith("'")))) {
+        value = value.substring(1, value.length - 1);
+      }
+      return value;
+    }
+    return null;
+  }
+
+  String _slug(String value) {
+    final result = value.toLowerCase().trim()
+        .replaceAll(RegExp(r'[^a-z0-9]+'), '-')
+        .replaceAll(RegExp(r'^-+|-+$'), '');
+    if (result.length <= 64) return result;
+    return result.substring(0, 64).replaceAll(RegExp(r'-+$'), '');
+  }
+
+  /// Keeps pinned skills active and loads only a few task-relevant skills.
+  List<AgentSkill> selectForTask(
+    List<AgentSkill> available,
+    String task,
+    Set<String> pinnedIds, {
+    int maxAutomatic = 3,
+  }) {
+    final selected = <String, AgentSkill>{};
+    for (final skill in available) {
+      if (pinnedIds.contains(skill.id)) selected[skill.id] = skill;
+    }
+
+    final prompt = task.toLowerCase();
+    final isCodingTask = RegExp(
+      r'\b(create|build|implement|add|fix|debug|refactor|rewrite|update|code|write|generate|develop|test|design|integrat|support|buat|bikin|tambah|tambahkan|perbaiki|betulin|ubah|rubah|koding|aplikasi|fitur|error|gagal|rusak|perbarui)\w*\b',
+    ).hasMatch(prompt);
+    for (final skill in available) {
+      if (isCodingTask && skill.id == 'coding-implementation') {
+        selected[skill.id] = skill;
+      }
+    }
+
+    final promptWords = _words(prompt);
+    final scored = <_ScoredSkill>[];
+    for (final skill in available) {
+      if (selected.containsKey(skill.id)) continue;
+      final keywords = <String>{
+        ..._words(skill.id.replaceAll('-', ' ')),
+        ..._words(skill.description),
+        ...?_skillAliases[skill.id],
+      }.where((word) =>
+          (word.length >= 3 || word == 'ui' || word == 'ux') &&
+          !_stopWords.contains(word)).toSet();
+
+      var score = 0;
+      for (final word in keywords) {
+        if (promptWords.contains(word)) score += word.length >= 7 ? 2 : 1;
+        if (word.length >= 5 &&
+            promptWords.any((input) =>
+                input.length >= 5 &&
+                (input.startsWith(word) || word.startsWith(input)))) {
+          score++;
+        }
+      }
+      if (score > 0) scored.add(_ScoredSkill(skill, score));
+    }
+    scored.sort((a, b) => b.score.compareTo(a.score));
+
+    var automatic = 0;
+    for (final entry in scored) {
+      if (automatic >= maxAutomatic || selected.length >= 5) break;
+      selected[entry.skill.id] = entry.skill;
+      automatic++;
+    }
+    return selected.values.toList(growable: false);
+  }
+
+  Set<String> _words(String text) => RegExp(r'[a-z0-9]{2,}')
+      .allMatches(text)
+      .map((match) => match.group(0)!)
+      .where((word) => !_stopWords.contains(word))
+      .toSet();
+}
+
+class _ScoredSkill {
+  const _ScoredSkill(this.skill, this.score);
+  final AgentSkill skill;
+  final int score;
+}
+)
+          .firstMatch(line);
       if (match == null) continue;
       var value = match.group(1)!.trim();
       if (value.length >= 2 &&

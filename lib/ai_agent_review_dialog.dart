@@ -73,7 +73,8 @@ class AiAgentReviewDialog extends StatelessWidget {
           ),
         ),
       ),
-    );
+    ),
+  );
   }
 
   Widget _content(String title, String content, Color foreground) {
